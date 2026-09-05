@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SOFI Levels Card</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b12;
+      --card: rgba(16, 22, 32, 0.92);
+      --line: rgba(148, 163, 184, 0.16);
+      --text: #eef4ff;
+      --muted: #8fa0b6;
+      --accent: #5b9fff;
+      --ok: #34d399;
+      --warn: #fbbf24;
+      --danger: #fb7185;
+      --wait: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(700px 360px at 15% -10%, rgba(91,159,255,0.18), transparent 55%),
+        radial-gradient(520px 300px at 90% 10%, rgba(52,211,153,0.08), transparent 50%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+    }
+    .card {
+      width: min(420px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 1.25rem 1.2rem 1.35rem;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+      backdrop-filter: blur(14px);
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+    .ticker {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .status {
+      border-radius: 14px;
+      padding: 0.9rem 1rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--line);
+      background: rgba(7, 11, 18, 0.65);
+    }
+    .status-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    .status-line {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .status.wait .status-line { color: var(--wait); }
+    .status.hold .status-line { color: var(--ok); }
+    .status.exit .status-line { color: var(--warn); }
+    .status.stop .status-line { color: var(--danger); }
+    .grid {
+      display: grid;
+      gap: 0.7rem;
+    }
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.7rem;
+    }
+    label {
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      font: inherit;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.9rem;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: rgba(7, 11, 18, 0.85);
+      color: var(--text);
+      padding: 0.65rem 0.7rem;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: rgba(91,159,255,0.55);
+      box-shadow: 0 0 0 3px rgba(91,159,255,0.12);
+    }
+    input:disabled {
+      opacity: 0.45;
+    }
+    .section-title {
+      margin: 0.35rem 0 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .note {
+      margin-top: 0.95rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.9rem;
+    }
+    button {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 0.65rem 0.7rem;
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary {
+      background: linear-gradient(135deg, #5b9fff, #4f7cff);
+      color: #041018;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div>
+        <h1>SOFI Levels Card</h1>
+        <div class="sub">Daily <strong>close</strong> checklist only. Not live quotes. Not advice.</div>
+      </div>
+      <div class="ticker">SOFI</div>
+    </div>
+
+    <div class="status wait" id="statusBox">
+      <div class="status-label">Status</div>
+      <div class="status-line" id="statusLine">Waiting</div>
+    </div>
+
+    <div class="grid">
+      <p class="section-title">Levels</p>
+      <div class="row-2">
+        <label>Get-in ($)
+          <input type="number" id="getIn" step="0.01" min="0" value="18.00" />
+        </label>
+        <label>Get-out ($)
+          <input type="number" id="getOut" step="0.01" min="0" value="18.00" />
+        </label>
+      </div>
+      <label>Hard stop ($)
+        <input type="number" id="hardStop" step="0.01" min="0" value="16.92" />
+      </label>
+
+      <p class="section-title">Order</p>
+      <div class="row-2">
+        <label>Shares planned
+          <input type="number" id="shares" step="1" min="0" placeholder="e.g. 50" />
+        </label>
+        <label>Limit status
+          <select id="orderStatus">
+            <option value="waiting">waiting</option>
+            <option value="filled">filled</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+        </label>
+      </div>
+      <label>Fill price ($)
+        <input type="number" id="fillPrice" step="0.01" min="0" placeholder="if filled" />
+      </label>
+
+      <p class="section-title">Today</p>
+      <label>Official close ($)
+        <input type="number" id="close" step="0.01" min="0" placeholder="paste today's close" />
+      </label>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary" id="saveBtn">Save card</button>
+      <button type="button" id="resetBtn">Reset defaults</button>
+    </div>
+
+    <p class="note">Rules use the close you paste — not after-hours ticks. Hard stop beats get-out if both apply. This does not place or cancel orders.</p>
+  </div>
+
+  <script>
+    const KEY = "sofi-levels-card-v1";
+    const DEFAULTS = {
+      getIn: 18,
+      getOut: 18,
+      hardStop: 16.92,
+      shares: "",
+      orderStatus: "waiting",
+      fillPrice: "",
+      close: ""
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function num(v) {
+      if (v === "" || v == null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function readForm() {
+      return {
+        getIn: num($("getIn").value),
+        getOut: num($("getOut").value),
+        hardStop: num($("hardStop").value),
+        shares: $("shares").value === "" ? "" : Number($("shares").value),
+        orderStatus: $("orderStatus").value,
+        fillPrice: $("fillPrice").value === "" ? "" : Number($("fillPrice").value),
+        close: $("close").value === "" ? "" : Number($("close").value)
+      };
+    }
+
+    function writeForm(data) {
+      $("getIn").value = data.getIn ?? "";
+      $("getOut").value = data.getOut ?? "";
+      $("hardStop").value = data.hardStop ?? "";
+      $("shares").value = data.shares ?? "";
+      $("orderStatus").value = data.orderStatus || "waiting";
+      $("fillPrice").value = data.fillPrice ?? "";
+      $("close").value = data.close ?? "";
+      syncFillEnabled();
+    }
+
+    function syncFillEnabled() {
+      const filled = $("orderStatus").value === "filled";
+      $("fillPrice").disabled = !filled;
+      if (!filled) $("fillPrice").placeholder = "only if filled";
+    }
+
+    function computeStatus(data) {
+      const order = data.orderStatus || "waiting";
+      if (order === "waiting" || order === "cancelled") {
+        return { text: "Waiting", kind: "wait" };
+      }
+      // filled
+      const close = typeof data.close === "number" ? data.close : null;
+      const getOut = typeof data.getOut === "number" ? data.getOut : null;
+      const hardStop = typeof data.hardStop === "number" ? data.hardStop : null;
+      if (close == null) {
+        return { text: "Filled — hold", kind: "hold" };
+      }
+      if (hardStop != null && close < hardStop) {
+        return { text: "Hard stop hit", kind: "stop" };
+      }
+      if (getOut != null && close < getOut) {
+        return { text: "Get-out hit (close under get-out)", kind: "exit" };
+      }
+      return { text: "Filled — hold", kind: "hold" };
+    }
+
+    function renderStatus() {
+      const data = readForm();
+      const { text, kind } = computeStatus(data);
+      const box = $("statusBox");
+      box.className = "status " + kind;
+      $("statusLine").textContent = text;
+    }
+
+    function save() {
+      localStorage.setItem(KEY, JSON.stringify(readForm()));
+      renderStatus();
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (!raw) {
+          writeForm(DEFAULTS);
+        } else {
+          writeForm({ ...DEFAULTS, ...JSON.parse(raw) });
+        }
+      } catch {
+        writeForm(DEFAULTS);
+      }
+      renderStatus();
+    }
+
+    ["getIn","getOut","hardStop","shares","orderStatus","fillPrice","close"].forEach(id => {
+      $(id).addEventListener("input", () => { syncFillEnabled(); renderStatus(); });
+      $(id).addEventListener("change", () => { syncFillEnabled(); renderStatus(); save(); });
+    });
+
+    $("saveBtn").addEventListener("click", save);
+    $("resetBtn").addEventListener("click", () => {
+      if (confirm("Reset to default levels ($18 / $18 / $16.92)?")) {
+        writeForm(DEFAULTS);
+        save();
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
