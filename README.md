@@ -8,6 +8,7 @@ A personal stock tracker for daily use. Static site, no build step, no account, 
 - A note and a per-ticker split are optional — one daily total is enough
 - Month total, week totals, year-to-date, win days vs loss days, and best and worst day
 - Data stays in this browser (`localStorage`), with **Export** and **Import** JSON backups
+- Dark mode is the default. Use the theme button to switch to light mode; the choice is remembered on this device. If you have not chosen yet, the page follows your system light or dark setting.
 
 On a phone, use the Calendar and Positions tabs. On a wider screen both show at once. The first visit starts with SOFI at the old default levels ($18.00 / $18.00 / $16.92). If this browser already had the old SOFI card saved, those saved levels are kept. Edit or remove SOFI whenever you want.
 

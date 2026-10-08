@@ -4,8 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#070b12" />
+  <script>
+    (function () {
+      var key = "stock-tracker-theme";
+      var theme = "dark";
+      try {
+        var saved = localStorage.getItem(key);
+        if (saved === "light" || saved === "dark") theme = saved;
+        else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
+      } catch (e) {}
+      document.documentElement.setAttribute("data-theme", theme);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", theme === "light" ? "#f4f7fb" : "#070b12");
+    })();
+  </script>
   <meta name="description" content="Personal stock tracker for positions and daily gains and losses. Not financial advice." />
   <title>Stock Tracker</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070b12'/%3E%3Cpath d='M6 20h4v6H6zm8-6h4v12h-4zm8-6h4v18h-4z' fill='%2334d399'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
@@ -19,6 +34,7 @@
         <p class="sub">Positions and daily results. <strong>Not financial advice.</strong> Does not place trades.</p>
       </div>
       <div class="header-actions">
+        <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode">Dark</button>
         <button type="button" id="exportBtn">Export</button>
         <button type="button" id="importBtn">Import</button>
         <input type="file" id="importFile" accept="application/json,.json" hidden />
@@ -162,6 +178,7 @@
   </dialog>
 
   <noscript><p class="footer-note">Stock Tracker needs JavaScript. It still stays on this device — there is no account.</p></noscript>
+  <script src="js/theme.js"></script>
   <script src="js/format.js"></script>
   <script src="js/logic.js"></script>
   <script src="js/storage.js"></script>
