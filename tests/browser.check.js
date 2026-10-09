@@ -22,6 +22,32 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function assertBrand(page) {
+  const info = await page.evaluate(function () {
+    const img = document.querySelector("img.logo");
+    const icon = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
+    const png = document.querySelector('link[rel="icon"][type="image/png"]');
+    const apple = document.querySelector('link[rel="apple-touch-icon"]');
+    const box = img ? img.getBoundingClientRect() : { width: 0, height: 0 };
+    return {
+      src: img ? img.getAttribute("src") : "",
+      loaded: !!(img && img.complete && img.naturalWidth > 0),
+      word: document.querySelector("h1") ? document.querySelector("h1").textContent : "",
+      box: Math.round(box.width),
+      icon: icon ? icon.getAttribute("href") : "",
+      png: png ? png.getAttribute("href") : "",
+      apple: apple ? apple.getAttribute("href") : ""
+    };
+  });
+  assert(info.word === "Bryz Trades", "wordmark " + info.word);
+  assert(info.src === "assets/bryz-trades-logo.svg", "logo src " + info.src);
+  assert(info.loaded, "logo image did not load");
+  assert(info.box === 28 || info.box === 32, "logo size " + info.box);
+  assert(info.icon === "assets/bryz-trades-logo.svg", "svg favicon " + info.icon);
+  assert(info.png === "assets/favicon-32.png", "png favicon " + info.png);
+  assert(info.apple === "assets/apple-touch-icon.png", "apple icon " + info.apple);
+}
+
 function ymd(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -51,6 +77,7 @@ function serve() {
       const type = file.endsWith(".css") ? "text/css"
         : file.endsWith(".js") ? "text/javascript"
         : file.endsWith(".svg") ? "image/svg+xml"
+        : file.endsWith(".png") ? "image/png"
         : "text/html";
       res.writeHead(200, { "content-type": type });
       res.end(data);
@@ -335,6 +362,7 @@ async function runFlow(browser, url, today, viewport, label) {
   try {
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "title");
     assert((await page.title()) === "Bryz Trades", "document title");
+    await assertBrand(page);
     await assertMobileChrome(page, label);
     await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "SOFI");
@@ -845,6 +873,7 @@ async function runPagesBase(browser, url) {
       return link ? link.getAttribute("href") : "";
     });
     assert(sheet === "css/styles.css", "pages stylesheet " + sheet);
+    await assertBrand(page);
     await shows(page, "#dashboardBody", "No trades recorded yet");
     if (page.errors.length) throw new Error(page.errors.join("\n"));
     console.log("pages base path passed");
