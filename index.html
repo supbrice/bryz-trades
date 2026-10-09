@@ -3,340 +3,196 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SOFI Levels Card</title>
+  <meta name="theme-color" content="#070b12" />
+  <script>
+    (function () {
+      var key = "stock-tracker-theme";
+      var theme = "dark";
+      try {
+        var saved = localStorage.getItem(key);
+        if (saved === "light" || saved === "dark") theme = saved;
+        else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
+      } catch (e) {}
+      document.documentElement.setAttribute("data-theme", theme);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", theme === "light" ? "#f4f7fb" : "#070b12");
+    })();
+  </script>
+  <meta name="description" content="Ladder — positions and daily gains and losses. Not financial advice." />
+  <meta name="apple-mobile-web-app-title" content="Ladder" />
+  <title>Ladder</title>
+  <link rel="icon" href="assets/ladder-logo.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #070b12;
-      --card: rgba(16, 22, 32, 0.92);
-      --line: rgba(148, 163, 184, 0.16);
-      --text: #eef4ff;
-      --muted: #8fa0b6;
-      --accent: #5b9fff;
-      --ok: #34d399;
-      --warn: #fbbf24;
-      --danger: #fb7185;
-      --wait: #94a3b8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: "DM Sans", system-ui, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(700px 360px at 15% -10%, rgba(91,159,255,0.18), transparent 55%),
-        radial-gradient(520px 300px at 90% 10%, rgba(52,211,153,0.08), transparent 50%),
-        var(--bg);
-      display: grid;
-      place-items: center;
-      padding: 1.25rem;
-    }
-    .card {
-      width: min(420px, 100%);
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 1.25rem 1.2rem 1.35rem;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
-      backdrop-filter: blur(14px);
-    }
-    .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.2rem;
-      letter-spacing: -0.02em;
-    }
-    .sub {
-      margin-top: 0.25rem;
-      color: var(--muted);
-      font-size: 0.82rem;
-      line-height: 1.35;
-    }
-    .ticker {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.3rem 0.55rem;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      color: var(--accent);
-      white-space: nowrap;
-    }
-    .status {
-      border-radius: 14px;
-      padding: 0.9rem 1rem;
-      margin-bottom: 1rem;
-      border: 1px solid var(--line);
-      background: rgba(7, 11, 18, 0.65);
-    }
-    .status-label {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 0.35rem;
-    }
-    .status-line {
-      font-size: 1.05rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-    .status.wait .status-line { color: var(--wait); }
-    .status.hold .status-line { color: var(--ok); }
-    .status.exit .status-line { color: var(--warn); }
-    .status.stop .status-line { color: var(--danger); }
-    .grid {
-      display: grid;
-      gap: 0.7rem;
-    }
-    .row-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.7rem;
-    }
-    label {
-      display: grid;
-      gap: 0.35rem;
-      font-size: 0.75rem;
-      color: var(--muted);
-      font-weight: 500;
-    }
-    input, select {
-      width: 100%;
-      font: inherit;
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.9rem;
-      border-radius: 11px;
-      border: 1px solid var(--line);
-      background: rgba(7, 11, 18, 0.85);
-      color: var(--text);
-      padding: 0.65rem 0.7rem;
-    }
-    input:focus, select:focus {
-      outline: none;
-      border-color: rgba(91,159,255,0.55);
-      box-shadow: 0 0 0 3px rgba(91,159,255,0.12);
-    }
-    input:disabled {
-      opacity: 0.45;
-    }
-    .section-title {
-      margin: 0.35rem 0 0;
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
-    .note {
-      margin-top: 0.95rem;
-      font-size: 0.75rem;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-    .actions {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.9rem;
-    }
-    button {
-      flex: 1;
-      border: 1px solid var(--line);
-      border-radius: 11px;
-      padding: 0.65rem 0.7rem;
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.primary {
-      background: linear-gradient(135deg, #5b9fff, #4f7cff);
-      color: #041018;
-      border: none;
-    }
-  </style>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <div class="card">
-    <div class="top">
+  <div class="app">
+    <header class="topbar">
       <div>
-        <h1>SOFI Levels Card</h1>
-        <div class="sub">Daily <strong>close</strong> checklist only. Not live quotes. Not advice.</div>
+        <div class="brand">
+          <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+            <line x1="32" y1="8" x2="32" y2="56" stroke-width="5"/>
+            <line x1="22" y1="16" x2="42" y2="16" stroke-width="4"/>
+            <line x1="25" y1="28" x2="39" y2="28" stroke-width="4"/>
+            <line x1="22" y1="40" x2="42" y2="40" stroke-width="4"/>
+            <line x1="25" y1="52" x2="39" y2="52" stroke-width="4"/>
+          </svg>
+          <h1>Ladder</h1>
+        </div>
+        <p class="sub">Positions and daily results. <strong>Not financial advice.</strong> Does not place trades.</p>
       </div>
-      <div class="ticker">SOFI</div>
-    </div>
-
-    <div class="status wait" id="statusBox">
-      <div class="status-label">Status</div>
-      <div class="status-line" id="statusLine">Waiting</div>
-    </div>
-
-    <div class="grid">
-      <p class="section-title">Levels</p>
-      <div class="row-2">
-        <label>Get-in ($)
-          <input type="number" id="getIn" step="0.01" min="0" value="18.00" />
-        </label>
-        <label>Get-out ($)
-          <input type="number" id="getOut" step="0.01" min="0" value="18.00" />
-        </label>
+      <div class="header-actions">
+        <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode">Dark</button>
+        <button type="button" id="exportBtn">Export</button>
+        <button type="button" id="importBtn">Import</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
       </div>
-      <label>Hard stop ($)
-        <input type="number" id="hardStop" step="0.01" min="0" value="16.92" />
-      </label>
+    </header>
 
-      <p class="section-title">Order</p>
-      <div class="row-2">
-        <label>Shares planned
-          <input type="number" id="shares" step="1" min="0" placeholder="e.g. 50" />
-        </label>
-        <label>Limit status
-          <select id="orderStatus">
-            <option value="waiting">waiting</option>
-            <option value="filled">filled</option>
-            <option value="cancelled">cancelled</option>
-          </select>
-        </label>
-      </div>
-      <label>Fill price ($)
-        <input type="number" id="fillPrice" step="0.01" min="0" placeholder="if filled" />
-      </label>
+    <div id="banner" class="banner" role="status" hidden></div>
 
-      <p class="section-title">Today</p>
-      <label>Official close ($)
-        <input type="number" id="close" step="0.01" min="0" placeholder="paste today's close" />
-      </label>
+    <div class="views">
+      <section id="positionsView" class="view" role="tabpanel" aria-label="Positions">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Positions</h2>
+            <button type="button" id="addTickerBtn" class="primary">Add stock</button>
+          </div>
+          <p class="hint">Shares, average cost, and an optional close checklist for each ticker.</p>
+          <div id="positionsList"></div>
+        </div>
+      </section>
+
+      <section id="calendarView" class="view active" role="tabpanel" aria-label="Calendar">
+        <div class="panel">
+          <div class="month-nav">
+            <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
+            <h2 id="monthLabel">Month</h2>
+            <button type="button" id="nextMonth" aria-label="Next month">›</button>
+          </div>
+          <div class="month-actions">
+            <button type="button" id="todayBtn" hidden>Today</button>
+            <button type="button" id="logTodayBtn" class="primary">Log today</button>
+          </div>
+          <div id="summary" aria-live="polite"></div>
+          <div id="calendarGrid" class="calendar" role="group"></div>
+          <p class="hint calendar-hint">Tap a day. One gain or loss is enough — a note or a per-stock split is optional.</p>
+          <div id="weekList"></div>
+        </div>
+      </section>
     </div>
 
-    <div class="actions">
-      <button type="button" class="primary" id="saveBtn">Save card</button>
-      <button type="button" id="resetBtn">Reset defaults</button>
-    </div>
-
-    <p class="note">Rules use the close you paste — not after-hours ticks. Hard stop beats get-out if both apply. This does not place or cancel orders.</p>
+    <p class="footer-note">Saved in this browser only. Export a JSON backup before you clear site data. No live prices, and nothing here buys or sells.</p>
   </div>
 
-  <script>
-    const KEY = "sofi-levels-card-v1";
-    const DEFAULTS = {
-      getIn: 18,
-      getOut: 18,
-      hardStop: 16.92,
-      shares: "",
-      orderStatus: "waiting",
-      fillPrice: "",
-      close: ""
-    };
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" id="tabCalendar" data-tab="calendar" class="active" aria-selected="true">Calendar</button>
+    <button type="button" role="tab" id="tabPositions" data-tab="positions" aria-selected="false">Positions</button>
+  </nav>
 
-    const $ = (id) => document.getElementById(id);
+  <dialog id="tickerDialog" aria-labelledby="tickerDialogTitle">
+    <form id="tickerForm">
+      <div class="dialog-head">
+        <h2 id="tickerDialogTitle">Add stock</h2>
+        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+      </div>
+      <p class="dialog-lead">Ticker, shares, and average cost. Levels are optional.</p>
+      <label>Ticker
+        <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="SOFI" required />
+      </label>
+      <div class="row-2">
+        <label>Shares
+          <input id="fieldShares" type="number" inputmode="decimal" min="0" step="any" placeholder="50" />
+        </label>
+        <label>Average cost ($)
+          <input id="fieldAvg" type="number" inputmode="decimal" min="0" step="0.01" placeholder="18.00" />
+        </label>
+      </div>
+      <label>Notes
+        <textarea id="fieldNotes" rows="2" maxlength="500" placeholder="Optional"></textarea>
+      </label>
+      <details id="levelsDetails">
+        <summary>Levels checklist</summary>
+        <p class="hint">Optional. Paste the official close, not a live quote. Hard stop beats get-out. This does not place or cancel orders.</p>
+        <div class="row-2">
+          <label>Get-in ($)
+            <input id="fieldGetIn" type="number" inputmode="decimal" min="0" step="0.01" />
+          </label>
+          <label>Get-out ($)
+            <input id="fieldGetOut" type="number" inputmode="decimal" min="0" step="0.01" />
+          </label>
+        </div>
+        <label>Hard stop ($)
+          <input id="fieldHardStop" type="number" inputmode="decimal" min="0" step="0.01" />
+        </label>
+        <div class="row-2">
+          <label>Limit status
+            <select id="fieldOrder">
+              <option value="">Not using</option>
+              <option value="waiting">waiting</option>
+              <option value="filled">filled</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </label>
+          <label>Fill price ($)
+            <input id="fieldFill" type="number" inputmode="decimal" min="0" step="0.01" placeholder="only if filled" disabled />
+          </label>
+        </div>
+        <label>Official close ($)
+          <input id="fieldClose" type="number" inputmode="decimal" min="0" step="0.01" placeholder="paste today's close" />
+        </label>
+        <div id="statusPreview" class="status wait" hidden>
+          <div class="status-label">Status</div>
+          <div class="status-line" id="statusPreviewLine"></div>
+        </div>
+      </details>
+      <p id="tickerError" class="form-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" class="primary" id="tickerSaveBtn">Add stock</button>
+        <button type="button" data-close-dialog>Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
-    function num(v) {
-      if (v === "" || v == null) return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    }
+  <dialog id="dayDialog" aria-labelledby="dayDialogTitle">
+    <form id="dayForm">
+      <div class="dialog-head">
+        <h2 id="dayDialogTitle">Day</h2>
+        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+      </div>
+      <p class="dialog-lead">Enter the whole day. A note or a per-stock split is optional.</p>
+      <div class="sign-toggle" role="group" aria-label="Gain or loss">
+        <button type="button" id="signGain" aria-pressed="true">Gain</button>
+        <button type="button" id="signLoss" aria-pressed="false">Loss</button>
+      </div>
+      <label>Amount ($)
+        <input id="dayAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+      </label>
+      <label>Note
+        <textarea id="dayNote" rows="2" maxlength="500" placeholder="Optional"></textarea>
+      </label>
+      <div class="split-head">
+        <p class="section-title">Split by stock</p>
+        <button type="button" id="addSplitBtn">Add split</button>
+      </div>
+      <div id="splitRows"></div>
+      <p id="splitHint" class="hint"></p>
+      <p id="dayError" class="form-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" class="primary">Save day</button>
+        <button type="button" id="clearDayBtn" hidden>Clear day</button>
+      </div>
+    </form>
+  </dialog>
 
-    function readForm() {
-      return {
-        getIn: num($("getIn").value),
-        getOut: num($("getOut").value),
-        hardStop: num($("hardStop").value),
-        shares: $("shares").value === "" ? "" : Number($("shares").value),
-        orderStatus: $("orderStatus").value,
-        fillPrice: $("fillPrice").value === "" ? "" : Number($("fillPrice").value),
-        close: $("close").value === "" ? "" : Number($("close").value)
-      };
-    }
-
-    function writeForm(data) {
-      $("getIn").value = data.getIn ?? "";
-      $("getOut").value = data.getOut ?? "";
-      $("hardStop").value = data.hardStop ?? "";
-      $("shares").value = data.shares ?? "";
-      $("orderStatus").value = data.orderStatus || "waiting";
-      $("fillPrice").value = data.fillPrice ?? "";
-      $("close").value = data.close ?? "";
-      syncFillEnabled();
-    }
-
-    function syncFillEnabled() {
-      const filled = $("orderStatus").value === "filled";
-      $("fillPrice").disabled = !filled;
-      if (!filled) $("fillPrice").placeholder = "only if filled";
-    }
-
-    function computeStatus(data) {
-      const order = data.orderStatus || "waiting";
-      if (order === "waiting" || order === "cancelled") {
-        return { text: "Waiting", kind: "wait" };
-      }
-      // filled
-      const close = typeof data.close === "number" ? data.close : null;
-      const getOut = typeof data.getOut === "number" ? data.getOut : null;
-      const hardStop = typeof data.hardStop === "number" ? data.hardStop : null;
-      if (close == null) {
-        return { text: "Filled — hold", kind: "hold" };
-      }
-      if (hardStop != null && close < hardStop) {
-        return { text: "Hard stop hit", kind: "stop" };
-      }
-      if (getOut != null && close < getOut) {
-        return { text: "Get-out hit (close under get-out)", kind: "exit" };
-      }
-      return { text: "Filled — hold", kind: "hold" };
-    }
-
-    function renderStatus() {
-      const data = readForm();
-      const { text, kind } = computeStatus(data);
-      const box = $("statusBox");
-      box.className = "status " + kind;
-      $("statusLine").textContent = text;
-    }
-
-    function save() {
-      localStorage.setItem(KEY, JSON.stringify(readForm()));
-      renderStatus();
-    }
-
-    function load() {
-      try {
-        const raw = localStorage.getItem(KEY);
-        if (!raw) {
-          writeForm(DEFAULTS);
-        } else {
-          writeForm({ ...DEFAULTS, ...JSON.parse(raw) });
-        }
-      } catch {
-        writeForm(DEFAULTS);
-      }
-      renderStatus();
-    }
-
-    ["getIn","getOut","hardStop","shares","orderStatus","fillPrice","close"].forEach(id => {
-      $(id).addEventListener("input", () => { syncFillEnabled(); renderStatus(); });
-      $(id).addEventListener("change", () => { syncFillEnabled(); renderStatus(); save(); });
-    });
-
-    $("saveBtn").addEventListener("click", save);
-    $("resetBtn").addEventListener("click", () => {
-      if (confirm("Reset to default levels ($18 / $18 / $16.92)?")) {
-        writeForm(DEFAULTS);
-        save();
-      }
-    });
-
-    load();
-  </script>
+  <noscript><p class="footer-note">Ladder needs JavaScript. It still stays on this device — there is no account.</p></noscript>
+  <script src="js/theme.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/logic.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
