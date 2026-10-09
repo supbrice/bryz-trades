@@ -878,6 +878,11 @@ async function runShots(browser, url, journal) {
       await shows(page, "#chartTip", "$");
       await page.locator("#dashboardBody .hit").first().focus();
       await shows(page, "#chartTip", "$");
+      await page.evaluate(function () {
+        const tip = document.getElementById("chartTip");
+        if (tip) tip.hidden = true;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      });
       await noOverflow(page, size[0] + " overview");
       await shotView(page, "investor_overview_" + size[0] + ".png");
       for (const section of sections) {

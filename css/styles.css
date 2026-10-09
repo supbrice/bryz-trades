@@ -235,8 +235,7 @@ html[data-theme="light"] .theme-icon-sun { display: block; }
 .shell, .views, .view, .panel { min-width: 0; max-width: 100%; }
 
 .view { display: none; }
-.view.active { display: block; animation: ladder-fade 160ms ease; }
-@keyframes ladder-fade { from { opacity: 0; } to { opacity: 1; } }
+.view.active { display: block; }
 
 .panel {
   background: var(--card);
@@ -886,7 +885,14 @@ fieldset label { margin-bottom: 0.45rem; }
   outline: 2px solid var(--focus-border);
   outline-offset: -2px;
 }
-.curve polyline, .curve .series { fill: none; stroke: var(--ok); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.curve polyline, .curve .series {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
 .curve .series.loss { stroke: var(--danger); }
 .curve .area { fill: var(--ok); opacity: 0.16; }
 .curve .area.loss { fill: var(--danger); }
