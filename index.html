@@ -38,7 +38,7 @@
           </svg>
           <h1>Ladder</h1>
         </div>
-        <p class="sub">A local trading journal. <strong>Not financial advice.</strong> Does not place trades or read the market.</p>
+        <p class="sub">A local trading journal for any ticker. <strong>Not financial advice.</strong> Does not place trades. A chart, when it loads, is not written into your trades.</p>
       </div>
       <div class="header-actions">
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
@@ -67,11 +67,59 @@
 
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
+          <div class="panel chart-panel">
+            <div class="panel-head">
+              <h2>Chart</h2>
+              <div class="button-row tight">
+                <button type="button" id="dashAddTrade" class="primary">Add trade</button>
+                <button type="button" id="dashPositions">Review positions</button>
+              </div>
+            </div>
+            <form id="symbolForm" class="symbol-bar">
+              <label>Symbol
+                <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
+              </label>
+              <label>Exchange
+                <input id="symbolExchange" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="NASDAQ" />
+              </label>
+              <button type="submit" id="symbolApply">Show chart</button>
+              <button type="button" id="watchAdd">Add to watchlist</button>
+              <button type="button" id="exchangeHint" hidden>Use suggested exchange</button>
+            </form>
+            <datalist id="symbolSuggestions"></datalist>
+            <p id="exchangeHintText" class="hint"></p>
+            <div class="period-bar" role="group" aria-label="Chart period">
+              <button type="button" data-period="1D">1D</button>
+              <button type="button" data-period="5D">5D</button>
+              <button type="button" data-period="1M">1M</button>
+              <button type="button" data-period="6M">6M</button>
+              <button type="button" data-period="YTD">YTD</button>
+              <button type="button" data-period="1Y">1Y</button>
+              <button type="button" data-period="5Y">5Y</button>
+              <button type="button" data-period="MAX">MAX</button>
+            </div>
+            <div id="chartMount" class="chart-mount" role="region" aria-label="Price chart"></div>
+            <p class="chart-attrib">Chart by <a href="https://www.tradingview.com/" rel="noopener noreferrer" target="_blank">TradingView</a>. Market data may be delayed. Ladder does not copy chart prices into trade records, and it does not calculate profit from the chart.</p>
+          </div>
+          <div class="panel" id="symbolDetail">
+            <div class="panel-head">
+              <h2>Symbol detail</h2>
+            </div>
+            <div id="symbolDetailBody"></div>
+          </div>
           <div class="panel">
             <div class="panel-head">
-              <h2>Dashboard</h2>
+              <h2>Watchlist</h2>
             </div>
-            <p class="hint">Realized figures use closed trades only. Open positions are counts, not profits. This is not account equity.</p>
+            <p class="hint">Prices appear only inside the TradingView tape, if it loads. They are not saved.</p>
+            <div id="watchlistBody"></div>
+            <div id="tapeMount" class="tape-mount" role="region" aria-label="Watchlist prices"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Journal</h2>
+            </div>
+            <p class="hint">Realized figures use recorded exits only. Unrealized figures need a mark you type. This is not account equity, cash, or a live portfolio value.</p>
             <div id="dashboardBody"></div>
           </div>
         </section>
@@ -91,14 +139,25 @@
                 <li><strong>Cancelled — not realized.</strong> Excluded from realized profit and loss.</li>
               </ul>
             </details>
-            <label class="inline-field">Show
-              <select id="positionFilter">
-                <option value="all">All trades</option>
-                <option value="open">Open</option>
-                <option value="closed">Closed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </label>
+            <div class="range-bar">
+              <label class="inline-field">Status
+                <select id="positionFilter">
+                  <option value="all">All trades</option>
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+              <label>Symbol
+                <input id="positionSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
+              </label>
+              <label>From
+                <input id="positionFrom" type="date" />
+              </label>
+              <label>To
+                <input id="positionTo" type="date" />
+              </label>
+            </div>
             <div id="positionsList"></div>
           </div>
         </section>
@@ -141,6 +200,17 @@
               </label>
               <label>To
                 <input id="rangeTo" type="date" />
+              </label>
+              <label>Symbol
+                <input id="analyticsSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
+              </label>
+              <label>Status
+                <select id="analyticsStatus">
+                  <option value="all">All statuses</option>
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </label>
             </div>
             <p id="rangeHint" class="hint"></p>
@@ -201,14 +271,14 @@
               <p>Another browser, another device, or a private-browsing window has its own empty copy. Private browsing may delete the journal when the window closes.</p>
               <p>Clearing site data, cookies, or history for this site deletes the journal. Export a JSON backup first if the records matter.</p>
               <p>A failed save or a failed import leaves the previous copy in place. Before an upgrade or import, Ladder also keeps a backup copy in this browser.</p>
-              <p id="schemaLine">Schema version 2.</p>
+              <p id="schemaLine">Schema version 3. Older journals in this browser are copied forward. The previous copy is kept.</p>
             </div>
           </div>
         </section>
       </main>
     </div>
 
-    <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. No live prices, and nothing here buys or sells.</p>
+    <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
   </div>
 
   <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">
@@ -222,7 +292,10 @@
       <fieldset id="tradeFields">
         <div class="row-2">
           <label>Ticker
-            <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="SOFI" required />
+            <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" required />
+          </label>
+          <label>Exchange
+            <input id="fieldExchange" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Optional" />
           </label>
           <label>Asset name
             <input id="fieldName" maxlength="80" autocomplete="off" placeholder="Optional" />
@@ -289,7 +362,22 @@
             </select>
           </label>
         </div>
-        <p class="hint">The closing price is the exit you write down. Choosing a target or stop reason does not mean the market reached that level.</p>
+        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. Chart prices are not used.</p>
+        <details id="partialDetails">
+          <summary>Partial exits</summary>
+          <p class="hint">Average-cost method. Every exit uses the same recorded entry price. Selling some shares leaves the rest open. Each lot has its own fees. A blank fee on a lot is treated as $0.00.</p>
+          <div id="exitRows"></div>
+          <button type="button" id="addExitBtn">Add partial exit</button>
+        </details>
+        <div class="row-2">
+          <label>Manual mark price ($)
+            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Only if you type it" />
+          </label>
+          <label>Mark as of
+            <input id="fieldMarkAsOf" type="date" />
+          </label>
+        </div>
+        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is manual. It is not read from the chart.</p>
         <div class="row-2">
           <label>Strategy
             <input id="fieldStrategy" maxlength="80" autocomplete="off" />
@@ -432,6 +520,7 @@
   <script src="js/format.js"></script>
   <script src="js/logic.js"></script>
   <script src="js/theme.js"></script>
+  <script src="js/chart.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -60,7 +60,7 @@ test("v1 positions and manual days migrate without becoming realized trades", ()
       "2026-01-05": { pnl: 25.5, note: "manual day", breakdown: [{ tickerId: "sof", symbol: "SOFI", amount: 25.5 }] }
     }
   });
-  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.schemaVersion, 3);
   assert.equal(migrated.trades.length, 1);
   assert.equal(migrated.trades[0].status, "open");
   assert.equal(migrated.trades[0].direction, "long");
@@ -100,11 +100,11 @@ test("round trip, malformed files, and incompatible versions do not apply", () =
   assert.equal(parsed.trades[0].netCents, undefined);
   assert.equal(parsed.trades[0].symbol, "SOFI");
   assert.equal(parsed.trades[0].fees, 1);
-  assert.equal(parsed.schemaVersion, 2);
-  assert.match(exported, /"schemaVersion": 2/);
+  assert.equal(parsed.schemaVersion, 3);
+  assert.match(exported, /"schemaVersion": 3/);
   assert.match(exported, /"app": "ladder"/);
 
-  ["{", "", "null", JSON.stringify({ schemaVersion: 3, trades: [], days: {} }), JSON.stringify({ hello: true })].forEach((text) => {
+  ["{", "", "null", JSON.stringify({ schemaVersion: 4, trades: [], days: {} }), JSON.stringify({ hello: true })].forEach((text) => {
     const plan = schema.planImport(original, text);
     assert.equal(plan.ok, false);
     assert.equal(JSON.stringify(original), snapshot);
@@ -260,4 +260,45 @@ test("old SOFI card migrates to one open long and the checklist wording stays ma
   assert.equal(held.text, "Filled — hold");
   const short = global.StockTracker.computeStatus(Object.assign({}, journal.trades[0], { direction: "short" }));
   assert.match(short.text, /long trades/);
+});
+
+test("schema 2 journals upgrade in place and a v3 backup is stored first", () => {
+  const v2 = JSON.stringify(journalWith([trade({ id: "keep", symbol: "AAPL" })]));
+  const store = storage.createMemoryStorage({ [schema.KEYS.v2]: v2 });
+  const loaded = storage.loadJournal(store);
+  assert.equal(loaded.data.schemaVersion, 3);
+  assert.equal(loaded.data.trades[0].symbol, "AAPL");
+  assert.equal(loaded.data.trades[0].exitPrice, 12);
+  assert.equal(calc.analyze(loaded.data).realizedNetCents, 900n);
+  assert.equal(store.getItem(schema.KEYS.v2), v2);
+  const backup = JSON.parse(store.getItem(schema.KEYS.premigrationV3));
+  assert.equal(backup.reason, "before-schema-v3-migration");
+  assert.equal(backup.raw, v2);
+  assert.equal(store.getItem(schema.KEYS.premigration), null);
+  const again = storage.loadJournal(store);
+  assert.equal(again.data.trades.length, 1);
+  assert.equal(store.getItem(schema.KEYS.v2), v2);
+});
+
+test("v2 and v3 files import, and a newer schema does not apply", () => {
+  const current = schema.emptyJournal();
+  const v2plan = schema.planImport(current, JSON.stringify(journalWith([trade({ id: "fromv2", symbol: "MSFT" })])));
+  assert.equal(v2plan.ok, true);
+  assert.equal(v2plan.journal.schemaVersion, 3);
+  assert.equal(v2plan.journal.trades[0].symbol, "MSFT");
+  const tooNew = schema.planImport(current, JSON.stringify({ schemaVersion: 4, trades: [], days: {} }));
+  assert.equal(tooNew.ok, false);
+  assert.match(tooNew.error, /schema version 4/);
+});
+
+test("partial exits cannot cover more shares than the position", () => {
+  const built = schema.tradeFromFields({
+    symbol: "NVDA",
+    direction: "long",
+    status: "open",
+    quantity: 5,
+    entryPrice: 100,
+    exits: [{ quantity: 6, price: 110, date: "2026-02-02", fees: 0, reason: "" }]
+  });
+  assert.match(built.error, /more shares/);
 });

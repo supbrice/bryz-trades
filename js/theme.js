@@ -20,6 +20,9 @@
     if (options && options.persist) {
       try { localStorage.setItem(KEY, next); } catch (err) { /* private mode can block storage */ }
     }
+    try {
+      document.dispatchEvent(new CustomEvent("ladder-theme", { detail: next }));
+    } catch (err) { /* document can be missing in tests */ }
   };
 
   function savedTheme() {

@@ -22,17 +22,18 @@
     };
   }
 
-  function writePremigration(storage, source, raw) {
+  function writePremigration(storage, source, raw, backupKey, reason) {
+    const slot = backupKey || KEYS.premigration;
     try {
-      if (storage.getItem(KEYS.premigration)) return true;
+      if (storage.getItem(slot)) return true;
       const payload = JSON.stringify({
         savedAt: new Date().toISOString(),
         source: source,
-        reason: "before-schema-v2-migration",
+        reason: reason || "before-schema-v2-migration",
         raw: raw
       });
-      storage.setItem(KEYS.premigration, payload);
-      return storage.getItem(KEYS.premigration) === payload;
+      storage.setItem(slot, payload);
+      return storage.getItem(slot) === payload;
     } catch (err) {
       return false;
     }
@@ -53,7 +54,7 @@
         const wrapped = JSON.parse(prem);
         if (wrapped && typeof wrapped.raw === "string") {
           const parsed = JSON.parse(wrapped.raw);
-          if (parsed && parsed.schemaVersion === schema.SCHEMA_VERSION) {
+          if (parsed && (parsed.schemaVersion === 2 || parsed.schemaVersion === 3)) {
             return schema.readStoredJournal(wrapped.raw).journal;
           }
           if (Array.isArray(parsed.tickers)) return schema.migrateV1(wrapped.raw);
@@ -62,6 +63,10 @@
           }
         }
       } catch (err) { /* try the next copy */ }
+    }
+    const v2 = storage.getItem(KEYS.v2);
+    if (v2) {
+      try { return schema.migrateV2(v2); } catch (err) { /* keep going */ }
     }
     const v1 = storage.getItem(KEYS.v1);
     if (v1) {
@@ -74,10 +79,10 @@
     return null;
   }
 
-  function migrateKey(storage, key, convert) {
+  function migrateKey(storage, key, convert, backupKey, reason) {
     const raw = storage.getItem(key);
     if (!raw) return null;
-    const backedUp = writePremigration(storage, key, raw);
+    const backedUp = writePremigration(storage, key, raw, backupKey, reason);
     if (!backedUp) {
       let journal = null;
       try { journal = convert(raw); } catch (err) { journal = null; }
@@ -129,6 +134,8 @@
         };
       }
     }
+    const fromV2 = migrateKey(storage, KEYS.v2, schema.migrateV2, KEYS.premigrationV3, "before-schema-v3-migration");
+    if (fromV2) return fromV2;
     const fromV1 = migrateKey(storage, KEYS.v1, schema.migrateV1);
     if (fromV1) return fromV1;
     const fromSofi = migrateKey(storage, KEYS.sofi, schema.migrateSofiCard);

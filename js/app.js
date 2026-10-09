@@ -9,6 +9,11 @@
     month: now.getMonth(),
     tab: "dashboard",
     positionFilter: "all",
+    positionSymbol: "",
+    positionFrom: "",
+    positionTo: "",
+    analyticsSymbol: "",
+    analyticsStatus: "all",
     rangePreset: "ytd",
     rangeFrom: "",
     rangeTo: ""
@@ -54,7 +59,71 @@
       refresh();
     },
     setFilter: function (filter) {
-      state.positionFilter = filter;
+      if (filter && typeof filter === "object") {
+        state.positionFilter = filter.filter || "all";
+        state.positionSymbol = filter.symbol || "";
+        state.positionFrom = filter.from || "";
+        state.positionTo = filter.to || "";
+      } else {
+        state.positionFilter = filter;
+      }
+      state.tab = "positions";
+      refresh();
+    },
+    setAnalytics: function (query) {
+      state.analyticsSymbol = query && query.symbol || "";
+      state.analyticsStatus = query && query.status || "all";
+      state.tab = "analytics";
+      refresh();
+    },
+    selectSymbol: function (input) {
+      const symbol = String(input && input.symbol || "").trim().replace(/^\$/, "").toUpperCase();
+      const exchange = String(input && input.exchange || "").trim().toUpperCase().replace(/[^A-Z]/g, "");
+      if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) {
+        ST.showBanner("Enter a ticker like AAPL or BRK.B.", true);
+        return;
+      }
+      state.data.settings = Object.assign({}, state.data.settings, {
+        selectedSymbol: symbol,
+        selectedExchange: exchange
+      });
+      state.tab = "dashboard";
+      persist();
+      refresh();
+    },
+    setPeriod: function (period) {
+      const allowed = { "1D": true, "5D": true, "1M": true, "6M": true, YTD: true, "1Y": true, "5Y": true, MAX: true };
+      if (!allowed[period]) return;
+      state.data.settings = Object.assign({}, state.data.settings, { chartPeriod: period });
+      state.tab = "dashboard";
+      persist();
+      refresh();
+    },
+    addWatch: function (input) {
+      const symbol = String(input && input.symbol || "").trim().replace(/^\$/, "").toUpperCase();
+      const exchange = String(input && input.exchange || "").trim().toUpperCase().replace(/[^A-Z]/g, "");
+      if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) {
+        ST.showBanner("Enter a ticker before adding it to the watchlist.", true);
+        return;
+      }
+      const settings = Object.assign({}, state.data.settings);
+      const watch = (settings.watchlist || []).slice();
+      if (!watch.some(function (item) { return item.symbol === symbol; })) {
+        watch.push({ symbol: symbol, exchange: exchange });
+      }
+      settings.watchlist = watch;
+      settings.selectedSymbol = symbol;
+      settings.selectedExchange = exchange;
+      state.data.settings = settings;
+      state.tab = "dashboard";
+      persist();
+      refresh();
+    },
+    removeWatch: function (symbol) {
+      const settings = Object.assign({}, state.data.settings);
+      settings.watchlist = (settings.watchlist || []).filter(function (item) { return item.symbol !== symbol; });
+      state.data.settings = settings;
+      persist();
       refresh();
     },
     setRange: function (range) {

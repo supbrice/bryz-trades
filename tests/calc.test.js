@@ -322,4 +322,62 @@ test("metric and status help stays descriptive and avoids market-hit claims", ()
   assert.doesNotMatch(calc.STATUS_HELP.open.detail, /target reached/i);
   assert.equal(calc.TRADE_DATE_CONVENTION, "exit-date");
   assert.equal(calc.SHORT_RETURN_BASIS, "short-sale-proceeds");
+  assert.equal(calc.COST_METHOD, "average-cost");
+  assert.match(calc.METRIC_HELP.unrealized, /mark price you type/i);
+  assert.match(calc.METRIC_HELP.portfolioValue, /N\/A/);
+});
+
+test("average-cost partial exits realize only the shares sold", () => {
+  const trade = {
+    id: "part",
+    symbol: "NVDA",
+    direction: "long",
+    status: "open",
+    quantity: 10,
+    entryPrice: 100,
+    exitPrice: null,
+    fees: 99,
+    exits: [
+      { id: "a", quantity: 4, price: 110, date: "2026-03-01", fees: 1, reason: "" },
+      { id: "b", quantity: 2, price: 90, date: "2026-03-02", fees: 0, reason: "target" }
+    ],
+    markPrice: null
+  };
+  const books = calc.positionAccounting(trade);
+  assert.equal(books.method, "average-cost");
+  assert.equal(books.remainingQty, 4);
+  assert.equal(books.partial, true);
+  assert.equal(books.realizedNetCents, 1900n);
+  assert.equal(books.unrealizedCents, null);
+  assert.equal(books.unrealizedReason, "no-mark");
+  const metrics = calc.analyze({ trades: [trade], days: {} });
+  assert.equal(metrics.realizedNetCents, 1900n);
+  assert.equal(metrics.tradeCount, 2);
+  const marked = Object.assign({}, trade, { markPrice: 130, markAsOf: "2026-03-03" });
+  const after = calc.positionAccounting(marked);
+  assert.equal(after.unrealizedCents, 12000n);
+  assert.equal(after.unrealizedReason, "manual-mark");
+  assert.equal(after.markAsOf, "2026-03-03");
+  const snap = calc.portfolioSnapshot({ trades: [marked] });
+  assert.equal(snap.portfolioValueCents, null);
+  assert.equal(snap.cashCents, null);
+  assert.equal(snap.unrealizedCents, 12000n);
+  const closed = Object.assign({}, trade, {
+    status: "closed",
+    exits: [
+      { id: "a", quantity: 4, price: 110, date: "2026-03-01", fees: 0, reason: "" },
+      { id: "b", quantity: 6, price: 100, date: "2026-03-04", fees: 0, reason: "" }
+    ]
+  });
+  assert.equal(calc.positionAccounting(closed).remainingQty, 0);
+  assert.equal(calc.positionAccounting(closed).unrealizedReason, "flat");
+  assert.equal(calc.analyze({ trades: [closed] }).realizedNetCents, 4000n);
+});
+
+test("a legacy closed trade is unchanged when it has no exit lots", () => {
+  const trade = closed({ quantity: 5, entryPrice: 10, exitPrice: 12, fees: 1 });
+  assert.equal(calc.tradeResult(trade).reason, "realized");
+  assert.equal(calc.tradeResult(trade).netCents, 900n);
+  assert.equal(calc.positionAccounting(trade).unrealizedReason, "flat");
+  assert.equal(calc.analyze({ trades: [trade] }).realizedNetCents, 900n);
 });

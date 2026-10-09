@@ -9,15 +9,18 @@
   const ST = root.StockTracker = root.StockTracker || {};
   Object.assign(ST, api);
 })(typeof globalThis !== "undefined" ? globalThis : this, function (money) {
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
   const KEYS = {
-    journal: "ladder-journal-v2",
+    journal: "ladder-journal-v3",
+    v2: "ladder-journal-v2",
     v1: "stock-tracker-v1",
     sofi: "sofi-levels-card-v1",
     premigration: "ladder-journal-premigration",
+    premigrationV3: "ladder-journal-premigration-v3",
     preimport: "ladder-journal-preimport",
-    corrupt: "ladder-journal-v2-corrupt"
+    corrupt: "ladder-journal-v3-corrupt"
   };
+  const CHART_PERIODS = { "1D": true, "5D": true, "1M": true, "6M": true, "YTD": true, "1Y": true, "5Y": true, "MAX": true };
   const MAX_TRADES = 2000;
   const MAX_DAYS = 4000;
   const MAX_IMPORT_CHARS = 2000000;
@@ -76,6 +79,39 @@
     return n;
   }
 
+  function cleanExchange(value) {
+    return String(value || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 12);
+  }
+
+  function cleanExit(raw, indexLabel) {
+    const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const where = indexLabel ? indexLabel + ": " : "";
+    const quantity = optionalQty(src.quantity, "Exit shares");
+    const price = optionalPrice(src.price, "Exit price");
+    if (quantity == null || quantity <= 0) throw new Error(where + "Each exit needs a share count above zero.");
+    if (price == null) throw new Error(where + "Each exit needs a price.");
+    const reason = src.reason == null || src.reason === "" ? "" : String(src.reason);
+    if (!EXIT_REASONS[reason]) throw new Error(where + "An exit has an unknown reason.");
+    let date = "";
+    try { date = optionalDate(src.date, "Exit date"); } catch (err) { throw new Error(where + err.message); }
+    const fees = optionalMoney(src.fees, "Exit fees");
+    const id = typeof src.id === "string" && src.id.trim() ? src.id.trim().slice(0, 80) : uid();
+    return { id: id, quantity: quantity, price: price, date: date, fees: fees, reason: reason };
+  }
+
+  function cleanExits(raw, quantity) {
+    if (raw == null) return [];
+    if (!Array.isArray(raw)) throw new Error("Exits must be a list.");
+    if (raw.length > 50) throw new Error("A trade has too many exits.");
+    const exits = raw.map(function (exit, index) { return cleanExit(exit, "Exit " + (index + 1)); });
+    if (!exits.length || quantity == null) return exits;
+    const opened = money.parseQtyTicks(quantity);
+    let used = 0n;
+    exits.forEach(function (exit) { used += money.parseQtyTicks(exit.quantity); });
+    if (opened != null && used > opened) throw new Error("Exits cover more shares than the position.");
+    return exits;
+  }
+
   function optionalDate(value, label) {
     if (value == null || value === "") return "";
     const textValue = String(value).trim();
@@ -113,6 +149,8 @@
     let getOut;
     let fillPrice;
     let close;
+    let markPrice;
+    let exits;
     try {
       quantity = optionalQty(src.quantity != null ? src.quantity : src.shares, "Shares");
       entryPrice = optionalPrice(src.entryPrice, "Entry price");
@@ -125,21 +163,43 @@
       getOut = optionalPrice(src.getOut, "Get-out");
       fillPrice = optionalPrice(src.fillPrice, "Fill price");
       close = optionalPrice(src.close, "Close");
+      markPrice = optionalPrice(src.markPrice, "Manual mark");
+      exits = cleanExits(src.exits, quantity);
     } catch (err) {
       throw new Error(where + err.message);
     }
     let entryDate;
     let exitDate;
+    let markAsOf;
     try {
       entryDate = optionalDate(src.entryDate, "Entry date");
       exitDate = optionalDate(src.exitDate, "Exit date");
+      markAsOf = optionalDate(src.markAsOf, "Mark date");
     } catch (err) {
       throw new Error(where + err.message);
+    }
+    if (markPrice == null) markAsOf = markAsOf || "";
+    if (exits.length && src.status === "closed" && quantity != null) {
+      const opened = money.parseQtyTicks(quantity);
+      let used = 0n;
+      exits.forEach(function (exit) { used += money.parseQtyTicks(exit.quantity); });
+      if (opened != null && used !== opened) {
+        throw new Error(where + "A closed trade's exits must cover every share. Leave it open if some shares remain.");
+      }
+    }
+    if (exits.length && src.status === "open" && quantity != null) {
+      const opened = money.parseQtyTicks(quantity);
+      let used = 0n;
+      exits.forEach(function (exit) { used += money.parseQtyTicks(exit.quantity); });
+      if (opened != null && used === opened) {
+        throw new Error(where + "These exits cover every share. Mark the trade closed, or remove an exit.");
+      }
     }
     const id = typeof src.id === "string" && src.id.trim() ? src.id.trim().slice(0, 80) : uid();
     return {
       id: id,
       symbol: symbol,
+      exchange: cleanExchange(src.exchange),
       name: text(src.name, 80),
       direction: src.direction,
       status: src.status,
@@ -162,7 +222,10 @@
       getOut: getOut,
       orderStatus: orderStatus,
       fillPrice: fillPrice,
-      close: close
+      close: close,
+      exits: exits,
+      markPrice: markPrice,
+      markAsOf: markPrice == null ? "" : markAsOf
     };
   }
 
@@ -197,7 +260,21 @@
   }
 
   function emptySettings() {
-    return { accountSize: null, riskPercent: null };
+    return {
+      accountSize: null,
+      riskPercent: null,
+      selectedSymbol: "",
+      selectedExchange: "",
+      chartPeriod: "6M",
+      watchlist: []
+    };
+  }
+
+  function cleanWatchItem(raw) {
+    const src = raw && typeof raw === "object" ? raw : {};
+    const symbol = cleanSymbol(src.symbol);
+    if (!validSymbol(symbol)) return null;
+    return { symbol: symbol, exchange: cleanExchange(src.exchange) };
   }
 
   function cleanSettings(raw) {
@@ -207,7 +284,25 @@
     if (src.riskPercent != null && src.riskPercent !== "" && (riskPercent == null || riskPercent < 0 || riskPercent > 100)) {
       throw new Error("Risk percent must be between 0 and 100.");
     }
-    return { accountSize: accountSize, riskPercent: riskPercent };
+    const selectedSymbol = cleanSymbol(src.selectedSymbol);
+    const watchlist = [];
+    const seen = Object.create(null);
+    (Array.isArray(src.watchlist) ? src.watchlist : []).forEach(function (item) {
+      if (watchlist.length >= 30) return;
+      const cleaned = cleanWatchItem(item);
+      if (!cleaned || seen[cleaned.symbol]) return;
+      seen[cleaned.symbol] = true;
+      watchlist.push(cleaned);
+    });
+    const period = CHART_PERIODS[src.chartPeriod] ? src.chartPeriod : "6M";
+    return {
+      accountSize: accountSize,
+      riskPercent: riskPercent,
+      selectedSymbol: validSymbol(selectedSymbol) ? selectedSymbol : "",
+      selectedExchange: cleanExchange(src.selectedExchange),
+      chartPeriod: period,
+      watchlist: watchlist
+    };
   }
 
   function emptyJournal() {
@@ -230,7 +325,7 @@
 
   function cleanJournal(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("That file is not a Ladder backup.");
-    if (raw.schemaVersion !== SCHEMA_VERSION) {
+    if (raw.schemaVersion !== 2 && raw.schemaVersion !== 3) {
       throw new Error("That file uses schema version " + (raw.schemaVersion == null ? "(missing)" : raw.schemaVersion) + ", which this page does not read. Nothing was changed.");
     }
     if (!Array.isArray(raw.trades)) throw new Error("That file is missing trades.");
@@ -288,6 +383,7 @@
     return {
       id: typeof src.id === "string" && src.id.trim() ? src.id.trim().slice(0, 80) : uid(),
       symbol: symbol,
+      exchange: cleanExchange(src.exchange),
       name: text(src.name, 80),
       direction: direction,
       status: status,
@@ -310,7 +406,10 @@
       getOut: looseNumber(money.priceNumber, src.getOut),
       orderStatus: orderStatus,
       fillPrice: looseNumber(money.priceNumber, src.fillPrice),
-      close: looseNumber(money.priceNumber, src.close)
+      close: looseNumber(money.priceNumber, src.close),
+      exits: [],
+      markPrice: looseNumber(money.priceNumber, src.markPrice),
+      markAsOf: safeDate(src.markAsOf)
     };
   }
 
@@ -325,7 +424,7 @@
   function readStoredJournal(raw) {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("unreadable");
-    if (parsed.schemaVersion !== SCHEMA_VERSION) throw new Error("incompatible");
+    if (parsed.schemaVersion !== 2 && parsed.schemaVersion !== 3) throw new Error("incompatible");
     if (!Array.isArray(parsed.trades) || !parsed.days || typeof parsed.days !== "object" || Array.isArray(parsed.days)) {
       throw new Error("unreadable");
     }
@@ -502,10 +601,19 @@
     return [trade.symbol, trade.direction, qty, entry, exit, trade.entryDate || "", trade.exitDate || ""].join("|");
   }
 
+  function migrateV2(raw) {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || parsed.schemaVersion !== 2) {
+      throw new Error("That journal is not schema version 2.");
+    }
+    return cleanJournal(parsed);
+  }
+
   function classifyEnvelope(parsed) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "unknown";
-    if (parsed.schemaVersion === SCHEMA_VERSION && Array.isArray(parsed.trades)) return "v2";
-    if (parsed.schemaVersion != null && parsed.schemaVersion !== SCHEMA_VERSION) return "incompatible";
+    if (parsed.schemaVersion === 2 && Array.isArray(parsed.trades)) return "v2";
+    if (parsed.schemaVersion === 3 && Array.isArray(parsed.trades)) return "v3";
+    if (parsed.schemaVersion != null && parsed.schemaVersion !== 2 && parsed.schemaVersion !== 3) return "incompatible";
     if ((parsed.version === 1 || parsed.version == null) && Array.isArray(parsed.tickers) && parsed.days && typeof parsed.days === "object") return "v1";
     if (parsed.getIn != null || parsed.hardStop != null || parsed.orderStatus != null) return "sofi";
     return "unknown";
@@ -524,7 +632,7 @@
     if (kind === "incompatible") {
       throw new Error("That file uses schema version " + parsed.schemaVersion + ", which this page does not read. Nothing was changed.");
     }
-    if (kind === "v2") return cleanJournal(parsed);
+    if (kind === "v2" || kind === "v3") return cleanJournal(parsed);
     if (kind === "v1") return migrateV1(parsed);
     if (kind === "sofi") return migrateSofiCard(parsed);
     throw new Error("That file is not a Ladder backup. Nothing was changed.");
@@ -575,15 +683,23 @@
   }
 
   function cloneJournal(journal) {
+    const settings = Object.assign({}, emptySettings(), journal.settings || {});
+    settings.watchlist = ((journal.settings && journal.settings.watchlist) || []).map(function (item) {
+      return Object.assign({}, item);
+    });
     return {
       schemaVersion: SCHEMA_VERSION,
-      trades: journal.trades.map(function (trade) { return Object.assign({}, trade); }),
+      trades: journal.trades.map(function (trade) {
+        const copy = Object.assign({}, trade);
+        copy.exits = Array.isArray(trade.exits) ? trade.exits.map(function (exit) { return Object.assign({}, exit); }) : [];
+        return copy;
+      }),
       days: Object.keys(journal.days).reduce(function (acc, key) {
         const day = journal.days[key];
         acc[key] = Object.assign({}, day, { breakdown: (day.breakdown || []).map(function (row) { return Object.assign({}, row); }) });
         return acc;
       }, {}),
-      settings: Object.assign({}, journal.settings || emptySettings())
+      settings: settings
     };
   }
 
@@ -622,9 +738,21 @@
       next.days[key] = Object.assign({}, day, { breakdown: (day.breakdown || []).slice() });
     });
     const incomingSettings = plan.journal.settings || emptySettings();
+    const currentSettings = next.settings || emptySettings();
+    const watch = [];
+    const seenWatch = Object.create(null);
+    (currentSettings.watchlist || []).concat(incomingSettings.watchlist || []).forEach(function (item) {
+      if (!item || !item.symbol || seenWatch[item.symbol] || watch.length >= 30) return;
+      seenWatch[item.symbol] = true;
+      watch.push({ symbol: item.symbol, exchange: item.exchange || "" });
+    });
     next.settings = {
-      accountSize: next.settings.accountSize != null ? next.settings.accountSize : incomingSettings.accountSize,
-      riskPercent: next.settings.riskPercent != null ? next.settings.riskPercent : incomingSettings.riskPercent
+      accountSize: currentSettings.accountSize != null ? currentSettings.accountSize : incomingSettings.accountSize,
+      riskPercent: currentSettings.riskPercent != null ? currentSettings.riskPercent : incomingSettings.riskPercent,
+      selectedSymbol: currentSettings.selectedSymbol || incomingSettings.selectedSymbol || "",
+      selectedExchange: currentSettings.selectedExchange || incomingSettings.selectedExchange || "",
+      chartPeriod: currentSettings.chartPeriod || incomingSettings.chartPeriod || "6M",
+      watchlist: watch
     };
     return next;
   }
@@ -656,6 +784,7 @@
     cleanJournal: cleanJournal,
     readStoredJournal: readStoredJournal,
     migrateV1: migrateV1,
+    migrateV2: migrateV2,
     migrateSofiCard: migrateSofiCard,
     toStored: toStored,
     exportPayload: exportPayload,
