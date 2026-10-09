@@ -392,22 +392,21 @@
       : null;
     const emptyJournal = !state.data.trades.length;
     const noCloses = !metrics || metrics.tradeCount === 0;
-    const periodNote = !bounds.ready
-      ? bounds.message
-      : (bounds.label + (bounds.start ? " · " + bounds.start + " – " + bounds.end : "") + " · not account equity");
+    const periodLine = !bounds.ready ? bounds.message : bounds.label;
     const spark = sparkSvg(metrics && metrics.curve);
     const delta = deltaHtml(bounds, metrics);
-    const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + " wins · " + metrics.losses + " losses · " + metrics.breakevens + " flat");
+    const aside = (spark || delta) ? '<div class="kpi-aside">' + spark + delta + "</div>" : "";
+    const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + "W · " + metrics.losses + "L · " + metrics.breakevens + " flat");
     const openSub = openTrades.length ? "Not realized" : "None open";
     const planSub = planned.cents == null
       ? (planned.skipped ? "Stop not recorded" : "No open plan")
-      : ((planned.equityPercent ? planned.equityPercent + " of saved account" : "From recorded stops") + (planned.skipped ? " · " + planned.skipped + " missing a stop" : ""));
+      : (planned.equityPercent ? planned.equityPercent + " of account" : "From recorded stops");
     document.getElementById("dashboardBody").innerHTML =
       (emptyJournal ? emptyState("No trades recorded yet. Log a trade to see results. Sample numbers are not filled in.") : "") +
       (!emptyJournal && !bounds.ready ? '<p class="empty">' + ST.escapeHtml(bounds.message) + "</p>" : "") +
       (!emptyJournal && bounds.ready && noCloses ? '<p class="empty">No closed trades in this period. Open positions are not shown as profit.</p>' : "") +
       '<div class="primary-metrics">' +
-        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodNote, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.", spark + delta) +
+        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodLine, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.", aside) +
         kpiText("Win rate", metrics && metrics.winRate, winSub, "dashWinRate", "Wins divided by wins, losses, and breakevens. A breakeven is a net of zero and is not a win.") +
         kpiText("Open positions", String(openTrades.length), openSub, "dashOpen", "Positions still open. They are excluded from realized profit.") +
         kpiPlain("Planned risk", planned.cents, planSub, "dashPlanned", "Remaining shares times the distance from the recorded entry to the recorded stop. Missing stops are left out. This is not a live stop.") +
@@ -417,15 +416,13 @@
         quietStat("Today, closed", today.tradeCents, "dashTodayTrades", today.tradeCents == null ? "nothing closed today" : "") +
         quietStat("Today, manual", today.manualCents, "dashTodayManual", today.manualCents == null ? "no manual entry" : "") +
       "</div>" +
-      '<div class="overview-split">' +
-        '<section class="chart-card"><div class="card-title"><h3>Realized P/L</h3>' + infoBtn("Cumulative closed-trade profit. Not account equity.") + "</div>" +
-          '<p class="hint">' + ST.escapeHtml(periodNote) + "</p>" +
+      '<div class="overview-board">' +
+        '<section class="chart-card"><div class="card-title"><h3>Equity curve</h3>' + infoBtn("Cumulative closed-trade profit. Not account equity.") + "</div>" +
+          '<p class="hint">Closed trades only. Not account equity.</p>' +
           curveSvg(metrics ? metrics.curve : [], metrics) +
         "</section>" +
-        '<div class="side-stack">' +
-          '<section class="side-card"><h3>Recent trades</h3>' + recentTable(bounds) + "</section>" +
-          '<section class="side-card"><h3>Open positions</h3>' + openCard(openTrades) + "</section>" +
-        "</div>" +
+        '<section class="chart-card side-card ledger"><h3>Recent trades</h3>' + recentTable(bounds) + "</section>" +
+        '<section class="chart-card"><h3>Open positions</h3>' + openCard(openTrades) + "</section>" +
       "</div>";
     drawSymbolDetail();
     drawWatchlist();
@@ -455,7 +452,7 @@
     if (!earlier || !metrics || typeof metrics.realizedNetCents !== "bigint") return "";
     const prev = ST.analyze(state.data, earlier);
     if (!prev.tradeCount || typeof prev.realizedNetCents !== "bigint") {
-      return '<p class="delta na">N/A <span>no closed trades in the prior window</span></p>';
+      return '<p class="delta na">No prior window</p>';
     }
     const delta = metrics.realizedNetCents - prev.realizedNetCents;
     return '<p class="delta ' + ST.pnlWord(delta) + '">' + ST.escapeHtml(ST.formatCents(delta)) + " <span>vs prior window</span></p>";
@@ -557,7 +554,7 @@
         '<td class="num" data-label="Net">' + net + "</td>" +
         "<td data-label=\"Status\">" + ST.escapeHtml(row.status) + "</td></tr>";
     }).join("");
-    return '<div class="trade-scroll"><table class="trade-table"><thead><tr><th>Ticker</th><th>Side</th><th>Date</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Net</th><th>Status</th></tr></thead><tbody>' + body + "</tbody></table></div>";
+    return '<div class="trade-scroll"><table class="trade-table"><thead><tr><th>Ticker</th><th>Side</th><th>Date</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Exit</th><th class="num">Net</th><th>Status</th></tr></thead><tbody>' + body + "</tbody></table></div>";
   }
 
   function tableRow(symbol, direction, date, qty, entry, exit, net, status) {
@@ -626,10 +623,10 @@
     });
   }
 
-  function sortHead(key, label) {
+  function sortHead(key, label, numeric) {
     const on = tradeSort.key === key;
     const mark = on ? (tradeSort.dir === "asc" ? " ↑" : " ↓") : "";
-    return '<th><button type="button" data-sort="' + key + '" aria-pressed="' + (on ? "true" : "false") + '">' + label + mark + "</button></th>";
+    return "<th" + (numeric ? ' class="num"' : "") + '><button type="button" data-sort="' + key + '" aria-pressed="' + (on ? "true" : "false") + '">' + label + mark + "</button></th>";
   }
 
   function tradeTable(trades) {
@@ -662,7 +659,7 @@
           (notes.length ? '<p class="meta">' + ST.escapeHtml(notes.join(" ")) + "</p>" : "") +
         "</td>" +
         '<td data-label="Status"><span class="pill ' + trade.status + '">' + ST.escapeHtml(status) + "</span></td>" +
-        '<td class="num" data-label="Date">' + ST.escapeHtml(tradeDate(trade) || "N/A") + "</td>" +
+        '<td data-label="Date">' + ST.escapeHtml(tradeDate(trade) || "N/A") + "</td>" +
         '<td class="num" data-label="Qty">' + ST.escapeHtml(trade.quantity == null ? "N/A" : ST.formatShares(trade.quantity)) + "</td>" +
         '<td class="num" data-label="Entry">' + ST.escapeHtml(entry == null ? "N/A" : ST.formatPlainMoney(entry)) + "</td>" +
         '<td class="num" data-label="Exit">' + ST.escapeHtml(trade.exitPrice == null ? "N/A" : ST.formatPlainMoney(trade.exitPrice)) + "</td>" +
@@ -677,8 +674,8 @@
       sortHead("symbol", "Ticker") +
       "<th>Status</th>" +
       sortHead("date", "Date") +
-      "<th>Qty</th><th>Entry</th><th>Exit</th>" +
-      sortHead("net", "Net") +
+      '<th class="num">Qty</th><th class="num">Entry</th><th class="num">Exit</th>' +
+      sortHead("net", "Net", true) +
       "<th>Actions</th></tr></thead><tbody>" + body + "</tbody></table></div>";
   }
 
@@ -794,8 +791,8 @@
       label = range.label;
     }
     document.getElementById("rangeHint").textContent = start
-      ? label + ": exit dates from " + start + " through " + end + ", inclusive. Results are placed on the exit date, not the entry date."
-      : "All closed trades that have an exit date. Trades without an exit date are listed separately and are not in the totals.";
+      ? label + " · exit dates " + start + " – " + end + ". Not account equity."
+      : "All dated closes. Not account equity.";
     setIfIdle("analyticsSymbol", state.analyticsSymbol || "");
     const statusEl = document.getElementById("analyticsStatus");
     if (document.activeElement !== statusEl) statusEl.value = state.analyticsStatus || "all";
@@ -828,11 +825,11 @@
     } else {
       body.push('<div class="primary-metrics">' + metric("Realized net P/L", metrics.realizedNetCents, ST.METRIC_HELP.realizedNet, "metric-realized") + metricText("Win rate", metrics.winRate, ST.METRIC_HELP.winRate) + metricText("Profit factor", metrics.profitFactor, ST.METRIC_HELP.profitFactor) + metric("Avg P/L", metrics.avgTradeCents, ST.METRIC_HELP.avgTrade) + "</div>");
       body.push('<section class="chart-card"><div class="card-title"><h3>Realized P/L</h3>' + infoBtn(ST.METRIC_HELP.cumulative) + "</div>" + curveSvg(metrics.curve, metrics) + "</section>");
-      body.push('<p class="hint">Closed-trade curve only. This is not account equity.</p>');
+      body.push('<p class="hint">Not account equity.</p>');
       body.push('<div class="viz-grid">' +
         '<section class="chart-card"><h3>Win / loss</h3>' + donutSvg(metrics) + "</section>" +
         '<section class="chart-card"><h3>Avg win vs avg loss</h3>' + compareBars(metrics) + "</section>" +
-        '<section class="chart-card"><h3>By weekday</h3><p class="hint">Closed-trade net on the exit date’s weekday. Days with no closes are left off.</p>' + barSvg(weekdayPoints(metrics.curve), "Realized profit and loss by weekday") + "</section>" +
+        '<section class="chart-card"><h3>By weekday</h3><p class="hint">Exit-date net. Empty weekdays are left off.</p>' + barSvg(weekdayPoints(metrics.curve), "Realized profit and loss by weekday") + "</section>" +
         '<section class="chart-card"><h3>By ticker</h3>' + barSvg(metrics.byTicker.map(function (row) { return { label: row.label, cents: row.netCents }; }), "Realized profit and loss by ticker") + "</section>" +
       "</div>");
       body.push('<div class="stat-grid">');
@@ -916,30 +913,29 @@
   }
 
   function metric(label, cents, help, id) {
-    return '<div class="metric"' + (id ? ' id="' + id + '"' : "") + "><h3>" + ST.escapeHtml(label) + "</h3>" + moneyHtml(cents) + '<p class="def">' + ST.escapeHtml(help) + "</p></div>";
+    return '<div class="metric"' + (id ? ' id="' + id + '"' : "") + '><div class="kpi-head"><h3>' + ST.escapeHtml(label) + "</h3>" + infoBtn(help) + "</div>" + moneyHtml(cents) + "</div>";
   }
 
   function metricCount(label, count, help) {
     const value = count == null
       ? '<div class="value na">N/A <span class="tag">not enough data</span></div>'
       : '<div class="value flat">' + count + "</div>";
-    return '<div class="metric"><h3>' + ST.escapeHtml(label) + "</h3>" + value + '<p class="def">' + ST.escapeHtml(help) + "</p></div>";
+    return '<div class="metric"><div class="kpi-head"><h3>' + ST.escapeHtml(label) + "</h3>" + infoBtn(help) + "</div>" + value + "</div>";
   }
 
   function metricMagnitude(label, cents, help, tag) {
     if (typeof cents !== "bigint") return metric(label, null, help);
     const word = cents === 0n ? "none" : tag;
     const cls = cents === 0n ? "flat" : "loss";
-    return '<div class="metric"><h3>' + ST.escapeHtml(label) + '</h3><div class="value ' + cls + '">' +
-      ST.escapeHtml(ST.formatCents(cents, "plain")) + ' <span class="tag">' + ST.escapeHtml(word) + "</span></div><p class=\"def\">" +
-      ST.escapeHtml(help) + "</p></div>";
+    return '<div class="metric"><div class="kpi-head"><h3>' + ST.escapeHtml(label) + "</h3>" + infoBtn(help) + '</div><div class="value ' + cls + '">' +
+      ST.escapeHtml(ST.formatCents(cents, "plain")) + ' <span class="tag">' + ST.escapeHtml(word) + "</span></div></div>";
   }
 
   function metricText(label, text, help) {
     const value = text == null
       ? '<div class="value na">N/A <span class="tag">not enough data</span></div>'
       : '<div class="value flat">' + ST.escapeHtml(text) + "</div>";
-    return '<div class="metric"><h3>' + ST.escapeHtml(label) + "</h3>" + value + '<p class="def">' + ST.escapeHtml(help) + "</p></div>";
+    return '<div class="metric"><div class="kpi-head"><h3>' + ST.escapeHtml(label) + "</h3>" + infoBtn(help) + "</div>" + value + "</div>";
   }
 
   function moneyHtml(cents) {
@@ -963,12 +959,12 @@
 
   function groupHtml(title, rows, help) {
     if (!rows.length) {
-      return '<div class="metric wide"><h3>' + ST.escapeHtml(title) + '</h3><div class="value na">N/A <span class="tag">not enough data</span></div><p class="def">' + ST.escapeHtml(help) + "</p></div>";
+      return '<div class="metric wide"><div class="kpi-head"><h3>' + ST.escapeHtml(title) + "</h3>" + infoBtn(help) + '</div><div class="value na">N/A <span class="tag">not enough data</span></div></div>';
     }
     const items = rows.map(function (row) {
       return "<li><span><strong>" + ST.escapeHtml(row.label) + "</strong> <span class=\"tag\">" + row.trades + " " + (row.trades === 1 ? "trade" : "trades") + "</span></span>" + moneyHtml(row.netCents) + "</li>";
     }).join("");
-    return '<div class="metric wide"><h3>' + ST.escapeHtml(title) + '</h3><p class="def">' + ST.escapeHtml(help) + '</p><ul class="perf-list">' + items + "</ul></div>";
+    return '<div class="metric wide"><div class="kpi-head"><h3>' + ST.escapeHtml(title) + "</h3>" + infoBtn(help) + '</div><ul class="perf-list">' + items + "</ul></div>";
   }
 
   function monthPoints(curve) {
@@ -1170,12 +1166,11 @@
       }
     });
     const gid = "equityFill" + curve.length + String(end.cents);
-    const endTip = tipText(end.date, end.cents);
     const label = "Cumulative closed-trade P/L from " + curve[0].date + " to " + end.date + ", ending at " + ST.formatCents(end.cents) + ". All-time high " + ST.formatCents(peak) + ". This is not account equity.";
-    const legend = '<ul class="chart-legend"><li><span class="swatch ath"></span> All-time high ' + ST.escapeHtml(ST.formatCents(peak, "plain")) + "</li>" +
-      (best && best.cents > 0n ? '<li><span class="swatch win"></span> Biggest win ' + ST.escapeHtml(chartLabel(best.date) + " " + ST.formatCents(best.cents)) + "</li>" : "") +
-      (worst && worst.cents < 0n ? '<li><span class="swatch loss"></span> Biggest loss ' + ST.escapeHtml(chartLabel(worst.date) + " " + ST.formatCents(worst.cents)) + "</li>" : "") +
-      "<li>End " + ST.escapeHtml(endTip) + "</li></ul>";
+    const legend = '<ul class="chart-legend"><li><span class="swatch ath"></span> High ' + ST.escapeHtml(ST.formatCents(peak, "plain")) + "</li>" +
+      (best && best.cents > 0n ? '<li><span class="swatch win"></span> Best ' + ST.escapeHtml(chartLabel(best.date)) + "</li>" : "") +
+      (worst && worst.cents < 0n ? '<li><span class="swatch loss"></span> Worst ' + ST.escapeHtml(chartLabel(worst.date)) + "</li>" : "") +
+      "</ul>";
     return '<svg class="curve" viewBox="0 0 ' + width + " " + height + '" role="group" aria-label="' + ST.escapeHtml(label) + '">' +
       '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B9F6CA" stop-opacity="0.38"></stop><stop offset="1" stop-color="#B9F6CA" stop-opacity="0"></stop></linearGradient></defs>' +
       grid +

@@ -78,6 +78,7 @@ function serve() {
         : file.endsWith(".js") ? "text/javascript"
         : file.endsWith(".svg") ? "image/svg+xml"
         : file.endsWith(".png") ? "image/png"
+        : file.endsWith(".woff2") ? "font/woff2"
         : "text/html";
       res.writeHead(200, { "content-type": type });
       res.end(data);
@@ -319,6 +320,40 @@ async function assertMobileChrome(page, label) {
   }
 }
 
+async function assertMainLayout(page, label) {
+  const width = page.viewportSize().width;
+  if (width < 700) {
+    const overlap = await page.evaluate(function () {
+      function box(id) {
+        const node = document.getElementById(id);
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      }
+      const button = box("topLogTrade");
+      const field = box("overviewTo");
+      const hits = !(button.right < field.left || button.left > field.right || button.bottom < field.top || button.top > field.bottom);
+      return { hits: hits, buttonTop: button.top, height: window.innerHeight };
+    });
+    assert(!overlap.hits, label + " Log trade overlaps the To field");
+    assert(overlap.buttonTop > overlap.height * 0.55, label + " Log trade is not a bottom action");
+    return;
+  }
+  const info = await page.evaluate(function () {
+    const side = document.querySelector(".sidebar").getBoundingClientRect().width;
+    const main = document.querySelector("main.views").getBoundingClientRect().width;
+    const cards = Array.from(document.querySelectorAll("#dashboardBody .primary-metrics > .stat")).map(function (node) {
+      return Math.round(node.getBoundingClientRect().width);
+    });
+    return { side: side, main: Math.round(main), cards: cards, width: window.innerWidth };
+  });
+  const room = info.width - info.side;
+  assert(info.main >= room * 0.7, label + " main " + info.main + "px is under 70% of " + Math.round(room) + "px");
+  assert(info.cards.length >= 4, label + " expected 4 KPI cards, saw " + info.cards.length);
+  info.cards.forEach(function (card, index) {
+    assert(card >= 180, label + " KPI " + index + " is " + card + "px");
+  });
+}
+
 async function noOverflow(page, label) {
   const info = await page.evaluate(function () {
     return {
@@ -366,6 +401,7 @@ async function runFlow(browser, url, today, viewport, label) {
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "title");
     assert((await page.title()) === "Bryz Trades", "document title");
     await assertBrand(page);
+    await assertMainLayout(page, label);
     await assertMobileChrome(page, label);
     await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "SOFI");
@@ -970,6 +1006,7 @@ async function runShots(browser, url, journal) {
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       });
       await noOverflow(page, size[0] + " overview");
+      await assertMainLayout(page, size[0] + " overview");
       await assertRecentTradesFit(page);
       await shotView(page, "investor_overview_" + size[0] + ".png");
       for (const section of sections) {

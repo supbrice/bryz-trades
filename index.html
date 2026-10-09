@@ -96,7 +96,7 @@
               <h2>Overview</h2>
               <button type="button" id="dashAddTrade" class="primary">Log trade</button>
             </div>
-            <p class="hint">Recorded exits only. A price you type is an estimate. A stop is a plan, not a market fill.</p>
+            <p class="hint">Recorded exits only. A stop is a plan, not a market fill.</p>
             <div id="dashboardBody"></div>
             <div class="button-row shortcuts">
               <button type="button" id="dashPositions">Open positions</button>
@@ -215,7 +215,7 @@
             </div>
             <div id="summary" aria-live="polite"></div>
             <div id="calendarGrid" class="calendar" role="group"></div>
-            <p class="hint calendar-hint">T is closed trades. M is a manual entry. They are never added together. A blank day is unrecorded. $0 is a recorded flat. Adj is an account adjustment, not trading P/L.</p>
+            <p class="hint calendar-hint">Closed-trade P/L by exit date. Manual days stay separate.</p>
             <div id="weekList"></div>
           </div>
         </section>
@@ -269,7 +269,7 @@
             <div class="panel-head">
               <h2>Risk</h2>
             </div>
-            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss. Remember saves only account size and risk percent.</p>
+            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss.</p>
             <div class="row-2">
               <label>Account size ($)
                 <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />

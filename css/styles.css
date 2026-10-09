@@ -970,10 +970,9 @@ fieldset label { margin-bottom: 0.45rem; }
   .logo { width: 32px; height: 32px; }
   .app { padding: 1.4rem 1.25rem 1.6rem; }
   .shell {
-    display: grid;
-    grid-template-columns: 11.5rem minmax(0, 1fr);
-    gap: 1rem;
-    align-items: start;
+    display: block;
+    width: 100%;
+    min-width: 0;
   }
   .tab-shell {
     position: static;
