@@ -1,20 +1,26 @@
-/* Wire the page to localStorage. No network, no orders. */
+/* Wire the journal to this browser. No network and no orders. */
 (function (root) {
   const ST = root.StockTracker;
   const now = new Date();
   const state = {
-    data: { version: 1, tickers: [], days: {} },
+    data: ST.emptyJournal(),
     today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     year: now.getFullYear(),
     month: now.getMonth(),
-    tab: "calendar"
+    tab: "dashboard",
+    positionFilter: "all",
+    rangePreset: "ytd",
+    rangeFrom: "",
+    rangeTo: ""
   };
 
   function persist() {
     try {
       ST.saveState(state.data);
+      ST.setSaveState("Saved on this device");
     } catch (err) {
-      ST.showBanner("Couldn't save on this device. Export a backup if you can.", true);
+      ST.setSaveState("Not saved");
+      ST.showBanner("Couldn't save on this device. Export a backup from Settings if you can.", true);
     }
   }
 
@@ -22,12 +28,24 @@
     ST.draw(state);
   }
 
-  function showMonthOf(key) {
-    const date = ST.parseDateKey(key);
-    if (!date) return;
-    state.year = date.getFullYear();
-    state.month = date.getMonth();
-    state.tab = "calendar";
+  function findTrade(id) {
+    return state.data.trades.find(function (trade) { return trade.id === id; });
+  }
+
+  function download(filename, text, type) {
+    const blob = new Blob([text], { type: type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function stamp() {
+    return ST.dateKey(state.today);
   }
 
   ST.bind({
@@ -35,35 +53,52 @@
       state.tab = tab;
       refresh();
     },
-    addTicker: function () {
-      ST.openTickerDialog(null);
-    },
-    editTicker: function (id) {
-      const ticker = state.data.tickers.find(function (item) { return item.id === id; });
-      if (ticker) ST.openTickerDialog(ticker);
-    },
-    removeTicker: function (id) {
-      const ticker = state.data.tickers.find(function (item) { return item.id === id; });
-      if (!ticker) return;
-      const ok = window.confirm("Remove " + ticker.symbol + " from the tracker? Past calendar days stay. This does not sell shares.");
-      if (!ok) return;
-      state.data.tickers = state.data.tickers.filter(function (item) { return item.id !== id; });
-      persist();
+    setFilter: function (filter) {
+      state.positionFilter = filter;
       refresh();
     },
-    saveTicker: function (fields, existingId) {
-      const built = ST.tickerFromFields(fields, existingId);
+    setRange: function (range) {
+      if (range.preset) state.rangePreset = range.preset;
+      if (range.from != null) state.rangeFrom = range.from;
+      if (range.to != null) state.rangeTo = range.to;
+      state.tab = "analytics";
+      refresh();
+    },
+    addTrade: function () {
+      ST.openTradeDialog(null, "create");
+    },
+    editTrade: function (id) {
+      const trade = findTrade(id);
+      if (trade) ST.openTradeDialog(trade, "edit");
+    },
+    reviewTrade: function (id) {
+      const trade = findTrade(id);
+      if (trade) ST.openTradeDialog(trade, "review");
+    },
+    closeTrade: function (id) {
+      const trade = findTrade(id);
+      if (trade) ST.openTradeDialog(trade, "close");
+    },
+    removeTrade: function (id) {
+      const trade = findTrade(id);
+      if (!trade) return { ok: false };
+      const ok = window.confirm("Delete " + trade.symbol + "? This removes the trade from realized totals. It does not place an order.");
+      if (!ok) return { cancelled: true };
+      state.data.trades = state.data.trades.filter(function (item) { return item.id !== id; });
+      state.tab = "positions";
+      persist();
+      refresh();
+      return { ok: true };
+    },
+    saveTrade: function (fields, existingId) {
+      const built = ST.tradeFromFields(fields, existingId);
       if (built.error) return built;
-      const duplicate = state.data.tickers.some(function (item) {
-        return item.symbol === built.ticker.symbol && item.id !== built.ticker.id;
-      });
-      if (duplicate) return { error: built.ticker.symbol + " is already on the list." };
       if (existingId) {
-        state.data.tickers = state.data.tickers.map(function (item) {
-          return item.id === existingId ? built.ticker : item;
+        state.data.trades = state.data.trades.map(function (item) {
+          return item.id === existingId ? built.trade : item;
         });
       } else {
-        state.data.tickers.push(built.ticker);
+        state.data.trades.push(built.trade);
       }
       state.tab = "positions";
       persist();
@@ -74,6 +109,7 @@
       const next = new Date(state.year, state.month + delta, 1);
       state.year = next.getFullYear();
       state.month = next.getMonth();
+      state.tab = "calendar";
       refresh();
     },
     goToday: function () {
@@ -83,71 +119,91 @@
       refresh();
     },
     openDay: function (key) {
-      ST.openDayDialog(key, state.data.days[key] || null, state.data.tickers);
+      ST.openDayDialog(key, state.data.days[key] || null);
     },
     saveDay: function (key, fields) {
       const built = ST.dayFromFields(fields);
       if (built.error) return built;
-      state.data.days[key] = built.day;
-      showMonthOf(key);
+      const day = built.day;
+      const empty = day.manualPnl == null && !day.note && !(day.breakdown && day.breakdown.length) && day.adjustment == null && !day.adjustmentNote;
+      if (empty) delete state.data.days[key];
+      else state.data.days[key] = day;
+      const date = ST.parseDateKey(key);
+      if (date) {
+        state.year = date.getFullYear();
+        state.month = date.getMonth();
+      }
+      state.tab = "calendar";
       persist();
       refresh();
       return { ok: true };
     },
     clearDay: function (key) {
       if (!state.data.days[key]) return { ok: true };
-      const ok = window.confirm("Remove the result for this day?");
+      const ok = window.confirm("Remove the manual entry and account adjustment for this day? Closed trades stay.");
       if (!ok) return { cancelled: true };
       delete state.data.days[key];
       persist();
       refresh();
       return { ok: true };
     },
-    exportData: function () {
-      const json = ST.exportJson(state.data);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "stock-tracker-" + ST.dateKey(state.today) + ".json";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      ST.showBanner("Backup downloaded.");
+    exportJson: function () {
+      download("ladder-" + stamp() + ".json", ST.exportJson(state.data), "application/json");
+      ST.showBanner("JSON backup downloaded. It stays on this device unless you move the file.");
+    },
+    exportTradesCsv: function () {
+      download("ladder-trades-" + stamp() + ".csv", ST.tradesToCsv(state.data), "text/csv");
+      ST.showBanner("Trades CSV downloaded.");
+    },
+    exportDaysCsv: function () {
+      download("ladder-days-" + stamp() + ".csv", ST.dailyToCsv(state.data), "text/csv");
+      ST.showBanner("Daily summary CSV downloaded.");
     },
     importText: function (text) {
-      let data;
-      try {
-        data = ST.parseImport(text);
-      } catch (err) {
-        ST.showBanner(err.message || "Couldn't read that file.", true);
+      const plan = ST.planImport(state.data, text);
+      if (!plan.ok) {
+        ST.showBanner(plan.error || "Couldn't read that file. Nothing was changed.", true);
         return;
       }
-      const stocks = data.tickers.length;
-      const dayCount = Object.keys(data.days).length;
-      const ok = window.confirm(
-        "Replace everything in this browser with the backup (" + stocks + " stocks, " + dayCount + " days)?"
-      );
-      if (!ok) return;
-      state.data = data;
-      const keys = Object.keys(data.days).sort();
-      const monthPrefix = ST.dateKey(state.today).slice(0, 7);
-      if (keys.some(function (key) { return key.indexOf(monthPrefix) === 0; })) {
-        state.year = state.today.getFullYear();
-        state.month = state.today.getMonth();
-      } else if (keys.length) {
-        showMonthOf(keys[keys.length - 1]);
+      ST.openImportDialog(plan);
+    },
+    applyImport: function (plan, choices) {
+      try {
+        state.data = ST.commitImport(localStorage, state.data, plan, choices);
+      } catch (err) {
+        return { error: err.message || "Import failed. Nothing was changed." };
       }
-      state.tab = "calendar";
-      persist();
+      state.tab = "dashboard";
       refresh();
-      ST.showBanner("Backup restored.");
+      ST.setSaveState("Saved on this device");
+      ST.showBanner(choices.mode === "replace" ? "Journal replaced. The previous copy is still backed up in this browser." : "Import merged. Matching trades were not counted twice.");
+      return { ok: true };
+    },
+    calculateRisk: function (input) {
+      const result = ST.positionRisk(input);
+      const box = document.getElementById("riskResult");
+      if (!result.ok) {
+        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(result.error) + "</p>";
+        return;
+      }
+      box.innerHTML = "<h3>Estimated size</h3><p>Planned risk " + ST.escapeHtml(ST.formatCents(result.plannedRiskCents)) +
+        ". Risk per share " + ST.escapeHtml(ST.formatCents(result.perShareRiskCents)) +
+        ". Quantity " + ST.escapeHtml(result.quantityText) + " shares.</p><p>" + ST.escapeHtml(result.disclaimer) + "</p>";
+      if (input.remember) {
+        const account = ST.moneyNumber(input.accountSize);
+        const percent = ST.scaledToNumber(ST.parseScaledDigits(input.riskPercent, 2), 2);
+        state.data.settings = {
+          accountSize: account,
+          riskPercent: percent
+        };
+        persist();
+      }
     }
   });
 
   const loaded = ST.loadState();
   state.data = loaded.data;
+  if (loaded.unsaved) ST.setSaveState("Not saved");
   refresh();
   if (loaded.warning) ST.showBanner(loaded.warning, true);
 })(typeof globalThis !== "undefined" ? globalThis : this);
