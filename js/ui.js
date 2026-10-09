@@ -14,7 +14,7 @@
   let tradeSort = { key: "date", dir: "desc" };
   const PAGE_TITLES = {
     dashboard: "Overview",
-    markets: "Markets",
+    markets: "Symbols",
     positions: "Trades",
     risk: "Risk",
     analytics: "Analytics",
@@ -165,8 +165,6 @@
       if (closeTrade) { handlers.closeTrade(closeTrade.dataset.closeTrade); return; }
       const remove = event.target.closest("[data-remove]");
       if (remove) handlers.removeTrade(remove.dataset.remove);
-      const period = event.target.closest("[data-period]");
-      if (period) { handlers.setPeriod(period.dataset.period); return; }
       const pick = event.target.closest("[data-pick-symbol]");
       if (pick) {
         handlers.selectSymbol({ symbol: pick.dataset.pickSymbol, exchange: pick.dataset.exchange || "" });
@@ -201,10 +199,6 @@
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape") hideChartTip();
     });
-    document.addEventListener("ladder-theme", function () {
-      if (state) syncWidgets(state);
-    });
-
     document.querySelectorAll("dialog").forEach(function (dialog) {
       dialog.addEventListener("click", function (event) {
         if (event.target === dialog) dialog.close();
@@ -221,7 +215,6 @@
     drawAnalytics();
     fillRiskDefaults();
     drawSymbolChrome();
-    syncWidgets(state);
   };
 
   ST.showBanner = function (message, isError) {
@@ -1704,6 +1697,8 @@
     return rows;
   }
 
+  const EXCHANGE_HINTS = { AAPL: "NASDAQ", NVDA: "NASDAQ", SOFI: "NASDAQ", TSLA: "NASDAQ", MSFT: "NASDAQ", AMD: "NASDAQ", QQQ: "NASDAQ", SPY: "AMEX" };
+
   function drawSymbolChrome() {
     const settings = state.data.settings || {};
     const fallback = state.data.trades.find(function (trade) { return trade.symbol; });
@@ -1711,7 +1706,7 @@
     const exchange = settings.selectedExchange || "";
     setIfIdle("symbolSearch", symbol);
     setIfIdle("symbolExchange", exchange);
-    const hint = symbol && ST.EXCHANGE_HINTS ? ST.EXCHANGE_HINTS[symbol] : "";
+    const hint = symbol ? EXCHANGE_HINTS[symbol] : "";
     const hintBtn = document.getElementById("exchangeHint");
     const hintText = document.getElementById("exchangeHintText");
     if (hint && !exchange) {
@@ -1721,7 +1716,7 @@
       hintText.textContent = "Suggested exchange " + hint + " for " + symbol + ". It is a venue hint, not a quote.";
     } else {
       hintBtn.hidden = true;
-      hintText.textContent = symbol ? "Exchange is optional. A blank exchange sends the ticker alone." : "Enter a ticker to load a chart.";
+      hintText.textContent = symbol ? "Exchange is saved with the watchlist. It is not a quote." : "Enter a ticker to see its journal.";
     }
     const symbols = { AAPL: true, NVDA: true, SOFI: true, TSLA: true, MSFT: true };
     state.data.trades.forEach(function (trade) { if (trade.symbol) symbols[trade.symbol] = true; });
@@ -1729,48 +1724,84 @@
     document.getElementById("symbolSuggestions").innerHTML = Object.keys(symbols).sort().map(function (item) {
       return '<option value="' + ST.escapeHtml(item) + '"></option>';
     }).join("");
-    document.querySelectorAll("[data-period]").forEach(function (btn) {
-      btn.setAttribute("aria-pressed", btn.dataset.period === (settings.chartPeriod || "6M") ? "true" : "false");
-    });
+  }
+
+  function moneyOrNa(value) {
+    return value == null ? "N/A" : ST.formatPlainMoney(value);
+  }
+
+  function levelItem(label, value) {
+    if (value == null || value === "") return "";
+    return "<li><span>" + ST.escapeHtml(label) + "</span><strong>" + ST.escapeHtml(moneyOrNa(value)) + "</strong></li>";
   }
 
   function drawSymbolDetail() {
     const settings = state.data.settings || {};
+    const names = Object.create(null);
+    state.data.trades.forEach(function (trade) { if (trade.symbol) names[trade.symbol] = true; });
+    (settings.watchlist || []).forEach(function (item) { if (item.symbol) names[item.symbol] = true; });
     const fallback = state.data.trades.find(function (trade) { return trade.symbol; });
     const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";
     const body = document.getElementById("symbolDetailBody");
     if (!symbol) {
-      body.innerHTML = '<p class="empty" id="symbolDetailName">Choose a symbol. Market value stays N/A.</p>';
+      body.innerHTML = '<p class="empty" id="symbolDetailName">Choose a symbol from the watchlist or add a ticker.</p>';
       return;
     }
     const metrics = ST.analyze(state.data, { symbol: symbol });
     const trades = state.data.trades.filter(function (trade) { return trade.symbol === symbol; });
+    const open = trades.filter(function (trade) { return trade.status === "open"; });
     let unrealized = null;
-    let unmarked = 0;
     trades.forEach(function (trade) {
       const books = ST.positionAccounting(trade);
       if (books.unrealizedReason === "manual-mark" && typeof books.unrealizedCents === "bigint") {
         unrealized = (unrealized == null ? 0n : unrealized) + books.unrealizedCents;
-      } else if (books.remainingQty != null && books.remainingQty > 0) unmarked += 1;
+      }
     });
+    const openHtml = open.length
+      ? '<h3>Open positions</h3><ul class="perf-list">' + open.map(function (trade) {
+        const books = ST.positionAccounting(trade);
+        const bits = [
+          trade.direction === "short" ? "Short" : "Long",
+          books.remainingQty == null ? "quantity N/A" : ST.formatShares(books.remainingQty) + " left",
+          "entry " + moneyOrNa(trade.entryPrice != null ? trade.entryPrice : trade.avgCost),
+          trade.hardStop == null ? "stop not recorded" : "stop " + moneyOrNa(trade.hardStop),
+          trade.targetPrice == null ? "target not recorded" : "target " + moneyOrNa(trade.targetPrice)
+        ];
+        return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(bits.join(" · ")) + "</span></li>";
+      }).join("") + "</ul><p class=\"hint\">A stop or target is a plan, not a fill.</p>"
+      : '<p class="empty">No open position for this symbol.</p>';
+    const levels = [];
+    trades.forEach(function (trade) {
+      levels.push(levelItem("Entry", trade.entryPrice != null ? trade.entryPrice : trade.avgCost));
+      levels.push(levelItem("Exit", trade.exitPrice));
+      levels.push(levelItem("Target", trade.targetPrice));
+      levels.push(levelItem("Stop", trade.hardStop));
+      levels.push(levelItem("Manual mark", trade.markPrice));
+    });
+    const levelHtml = levels.filter(Boolean).length
+      ? '<h3>Recorded levels</h3><ul class="perf-list">' + levels.filter(Boolean).join("") + "</ul>"
+      : "";
+    const rows = Object.keys(names).sort().map(function (name) {
+      const row = ST.analyze(state.data, { symbol: name });
+      const openCount = state.data.trades.filter(function (trade) { return trade.symbol === name && trade.status === "open"; }).length;
+      const net = typeof row.realizedNetCents === "bigint" ? moneyHtml(row.realizedNetCents) : '<span class="na">N/A</span>';
+      return '<tr><td data-label="Symbol"><button type="button" class="chip" data-pick-symbol="' + ST.escapeHtml(name) + '">' + ST.escapeHtml(name) + "</button></td>" +
+        '<td class="num" data-label="Closed P/L">' + net + "</td>" +
+        '<td class="num" data-label="Win rate">' + ST.escapeHtml(row.winRate || "N/A") + "</td>" +
+        '<td class="num" data-label="Trades">' + row.tradeCount + "</td>" +
+        '<td class="num" data-label="Open">' + openCount + "</td></tr>";
+    }).join("");
     body.innerHTML = '<p class="meta" id="symbolDetailName"><strong>' + ST.escapeHtml(symbol) + "</strong>" +
       (settings.selectedExchange ? " · " + ST.escapeHtml(settings.selectedExchange) : "") + "</p>" +
-      '<div class="stats">' +
-        stat("Realized, this symbol", metrics.realizedNetCents, "id=\"symbolRealized\"") +
-        '<div class="stat" id="symbolUnrealized"><div class="label">Unrealized, manual marks</div>' +
-          (unrealized == null ? '<div class="value na">N/A <span class="tag">no manual mark</span></div>' : moneyHtml(unrealized)) +
-        "</div>" +
-        '<div class="stat"><div class="label">Market price</div><div class="value na">N/A <span class="tag">not read from the chart</span></div></div></div>' +
-      '<p class="hint">' + (unmarked
-        ? ST.escapeHtml(unmarked + " open position" + (unmarked === 1 ? " has" : "s have") + " no manual mark.")
-        : "Unrealized P/L uses only a mark you type.") + "</p>" +
-      (trades.length
-        ? '<ul class="perf-list">' + trades.map(function (trade) {
-          const books = ST.positionAccounting(trade);
-          return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(trade.status) + " " + ST.escapeHtml(trade.direction) +
-            "</span><span>" + ST.escapeHtml(books.remainingQty == null ? "quantity N/A" : ST.formatShares(books.remainingQty) + " left") + "</span></li>";
-        }).join("") + "</ul>"
-        : '<p class="empty">No saved trades for this symbol. The chart can still load. Nothing is added until you save a trade.</p>');
+      '<div class="primary-metrics">' +
+        stat("Closed P/L", metrics.realizedNetCents, "id=\"symbolRealized\"") +
+        '<div class="stat" id="symbolWinRate"><div class="label">Win rate</div><div class="value flat">' + ST.escapeHtml(metrics.winRate || "N/A") + "</div></div>" +
+        '<div class="stat" id="symbolTrades"><div class="label">Trades</div><div class="value flat">' + metrics.tradeCount + "</div><p class=\"substat\">Closed only</p></div>" +
+      "</div>" +
+      (unrealized == null ? "" : '<p class="hint">Unrealized at your manual mark ' + ST.escapeHtml(ST.formatCents(unrealized)) + ".</p>") +
+      openHtml + levelHtml +
+      (trades.length ? "" : '<p class="empty">No saved trades for this symbol. Nothing is added until you save a trade.</p>') +
+      (rows ? '<h3>All symbols</h3><div class="trade-scroll"><table class="trade-table"><thead><tr><th>Symbol</th><th class="num">Closed P/L</th><th class="num">Win rate</th><th class="num">Trades</th><th class="num">Open</th></tr></thead><tbody>' + rows + "</tbody></table></div>" : "");
   }
 
   function drawWatchlist() {
@@ -1798,40 +1829,6 @@
     return '<button type="button" class="chip' + (active ? " active" : "") + '" data-pick-symbol="' + ST.escapeHtml(symbol) +
       '" data-exchange="' + ST.escapeHtml(exchange || "") + '">' + ST.escapeHtml(symbol) + " <span class=\"tag\">" + ST.escapeHtml(label) + "</span></button>" +
       (removable ? '<button type="button" data-remove-watch="' + ST.escapeHtml(symbol) + '" aria-label="Remove ' + ST.escapeHtml(symbol) + ' from watchlist">Remove</button>' : "");
-  }
-
-  function tapeItems(journal) {
-    const settings = journal.settings || {};
-    if (settings.watchlist && settings.watchlist.length) return settings.watchlist.slice(0, 12);
-    const items = [];
-    const seen = Object.create(null);
-    (journal.trades || []).forEach(function (trade) {
-      if (!trade.symbol || seen[trade.symbol] || items.length >= 12) return;
-      seen[trade.symbol] = true;
-      items.push({ symbol: trade.symbol, exchange: trade.exchange || (ST.EXCHANGE_HINTS && ST.EXCHANGE_HINTS[trade.symbol]) || "" });
-    });
-    return items;
-  }
-
-  function syncWidgets(current) {
-    if (!current || current.tab !== "markets" || !ST.mountChart) return;
-    const settings = current.data.settings || {};
-    const fallback = current.data.trades.find(function (trade) { return trade.symbol; });
-    const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";
-    const exchange = settings.selectedExchange || (symbol && ST.EXCHANGE_HINTS && ST.EXCHANGE_HINTS[symbol]) || "";
-    const theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-    const chart = document.getElementById("chartMount");
-    if (!symbol) {
-      chart.innerHTML = '<div class="chart-fallback" role="status"><p><strong>No symbol selected</strong></p><p>Enter a ticker to load a chart. No price is invented.</p></div>';
-      chart.setAttribute("data-widget-state", "empty");
-      chart.removeAttribute("data-widget-config");
-    } else {
-      const config = ST.chartWidgetConfig(symbol, exchange, settings.chartPeriod || "6M", theme);
-      chart.setAttribute("aria-label", "Price chart for " + config.symbol);
-      ST.mountChart(chart, config);
-    }
-    const items = tapeItems(current.data);
-    ST.mountTape(document.getElementById("tapeMount"), ST.tapeWidgetConfig(items, theme));
   }
 
   function showFormError(id, message) {

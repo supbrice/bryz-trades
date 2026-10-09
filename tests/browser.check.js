@@ -10,7 +10,7 @@ const shotDir = "/opt/cursor/artifacts/screenshots";
 const fullShotDir = path.join(os.tmpdir(), "ladder-browser-shots");
 const views = [
   ["dashboard", "Overview"],
-  ["markets", "Markets"],
+  ["markets", "Symbols"],
   ["positions", "Trades"],
   ["risk", "Risk"],
   ["analytics", "Analytics"],
@@ -228,22 +228,32 @@ async function openPage(browser, url, viewport, theme, journal) {
   }, { theme: theme, journal: journal ? JSON.stringify(journal) : "", v1: "" });
   const page = await context.newPage();
   const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
   page.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
+    errors.push(String(err && err.message || err));
   });
   page.on("console", function (msg) {
     if (msg.type() !== "error") return;
-    const text = msg.text();
-    if (/tradingview|sandboxed|net::ERR|Failed to load resource/i.test(text)) return;
-    errors.push("console: " + text);
+    errors.push("console: " + msg.text());
   });
   await page.goto(url, { waitUntil: "load" });
   await page.waitForSelector("h1");
   if (errors.length) throw new Error(errors.join("\n"));
   page.errors = errors;
   return { context: context, page: page };
+}
+
+function watchOrigin(page, errors, origin) {
+  page.on("request", function (request) {
+    const raw = request.url();
+    if (/^(data|blob|about):/i.test(raw)) return;
+    let requestOrigin = "";
+    try { requestOrigin = new URL(raw).origin; } catch (err) {
+      errors.push("unreadable request " + raw);
+      return;
+    }
+    if (requestOrigin !== origin) errors.push("outside origin " + raw);
+  });
 }
 
 async function shows(page, selector, text) {
@@ -380,7 +390,7 @@ async function main() {
     await runImports(browser, url, today);
     await runLarge(browser, url, today);
     await runUniversal(browser, url, today);
-    await runChart(browser, url);
+    await runSymbols(browser, url);
     await runPreserve(browser, url);
     await runPagesBase(browser, url);
     await runShots(browser, url, demoJournal(now));
@@ -524,10 +534,9 @@ async function runMigration(browser, url) {
   });
   const page = await context.newPage();
   const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
   page.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
+    errors.push(String(err && err.message || err));
   });
   await page.goto(url, { waitUntil: "load" });
   await page.getByRole("tab", { name: "Trades" }).click();
@@ -746,97 +755,31 @@ async function runUniversal(browser, url, today) {
   }
 }
 
-async function readChartConfig(page) {
-  const raw = await page.locator("#chartMount").getAttribute("data-widget-config");
-  assert(raw, "chart config missing");
-  return JSON.parse(raw);
-}
-
-async function runChart(browser, url) {
-  const opened = await openPage(browser, url, { width: 390, height: 844 }, "light", demoJournal(new Date()));
+async function runSymbols(browser, url) {
+  const opened = await openPage(browser, url, { width: 1440, height: 900 }, "dark", demoJournal(new Date()));
   const page = opened.page;
   page.setDefaultTimeout(15000);
   try {
-    await page.getByRole("tab", { name: "Markets" }).click();
-    await page.waitForSelector("#chartMount[data-widget-config]");
-    let config = await readChartConfig(page);
-    assert(config.symbol === "NASDAQ:SOFI", "default chart symbol " + config.symbol);
-    assert(config.range === "6M", "default range");
-    assert(config.theme === "light", "chart follows light theme");
-    const scriptSrc = await page.locator("#chartMount").getAttribute("data-widget-src");
-    assert(scriptSrc === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", scriptSrc);
-    const periods = [
-      ["1D", "1D"],
-      ["5D", "5D"],
-      ["1M", "1M"],
-      ["6M", "6M"],
-      ["YTD", "YTD"],
-      ["1Y", "12M"],
-      ["5Y", "60M"],
-      ["MAX", "ALL"]
-    ];
-    for (const pair of periods) {
-      await page.locator("[data-period=\"" + pair[0] + "\"]").click();
-      config = await readChartConfig(page);
-      assert(config.range === pair[1], pair[0] + " range was " + config.range);
-      assert(config.theme === "light", "period kept theme");
-    }
-    await page.locator("#symbolSearch").fill("NVDA");
-    await page.locator("#symbolExchange").fill("NASDAQ");
+    await page.getByRole("tab", { name: "Symbols" }).click();
+    await shows(page, "#watchlistBody", "SOFI");
+    await shows(page, "#watchlistBody", "AAPL");
+    await shows(page, "#symbolDetailBody", "SOFI");
+    await shows(page, "#symbolDetailBody", "Win rate");
+    await shows(page, "#symbolDetailBody", "Closed P/L");
+    await shows(page, "#symbolDetailBody", "$16.92");
+    await shows(page, "#symbolDetailBody", "$22.00");
+    await page.locator("#symbolSearch").fill("AAPL");
     await page.locator("#symbolApply").click();
-    config = await readChartConfig(page);
-    assert(config.symbol === "NASDAQ:NVDA", "switched symbol " + config.symbol);
-    await page.locator("#themeToggle").click();
-    config = await readChartConfig(page);
-    assert(config.theme === "dark", "chart follows dark theme");
-    await page.waitForFunction(function () {
-      const el = document.getElementById("chartMount");
-      const widgetState = el && el.getAttribute("data-widget-state");
-      return widgetState === "loaded" || widgetState === "fallback";
-    }, null, { timeout: 12000 });
-    const state = await page.locator("#chartMount").getAttribute("data-widget-state");
-    if (state === "loaded") console.log("tradingview chart loaded");
-    else console.log("tradingview unreachable from this environment; fallback shown and widget config was still checked");
+    await shows(page, "#symbolDetailName", "AAPL");
+    await shows(page, "#symbolRealized", "+$");
+    assert(await page.locator("iframe").count() === 0, "no frames");
+    assert(await page.locator("script[src^='http']").count() === 0, "no outside scripts");
     const journalAfter = await page.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
-    assert(journalAfter && journalAfter.includes("\"symbol\":\"SOFI\""), "chart did not clear the journal");
-    console.log("chart config passed");
+    assert(journalAfter && journalAfter.includes("\"symbol\":\"SOFI\""), "symbol view changed the journal");
+    if (page.errors.length) throw new Error(page.errors.join("\n"));
+    console.log("symbols view passed");
   } finally {
     await opened.context.close();
-  }
-
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(function () {
-    localStorage.clear();
-    localStorage.setItem("stock-tracker-theme", "dark");
-  });
-  await context.route("**://*.tradingview.com/**", function (route) { route.abort(); });
-  await context.route("**://s3.tradingview.com/**", function (route) { route.abort(); });
-  const blocked = await context.newPage();
-  const errors = [];
-  blocked.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
-  });
-  try {
-    await blocked.goto(url, { waitUntil: "load" });
-    await blocked.getByRole("tab", { name: "Markets" }).click();
-    await blocked.waitForSelector("#chartMount .chart-fallback", { timeout: 12000 });
-    const fallback = await blocked.locator("#chartMount").innerText();
-    assert(fallback.includes("Chart unavailable"), fallback);
-    assert(fallback.includes("No price was filled in"), fallback);
-    const config = JSON.parse(await blocked.locator("#chartMount").getAttribute("data-widget-config"));
-    assert(config.symbol === "NASDAQ:SOFI", "blocked config " + config.symbol);
-    assert(config.theme === "dark", "blocked theme");
-    const src = await blocked.locator("#chartMount").getAttribute("data-widget-src");
-    assert(src === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", src);
-    assert(await blocked.locator("#chartMount script").count() === 0, "failed chart does not leave the embed in the page");
-    const journal = await blocked.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
-    assert(journal && !journal.includes("\"markPrice\":1"), "no fabricated mark");
-    if (errors.length) throw new Error(errors.join("\n"));
-    console.log("chart failure state passed");
-  } finally {
-    await context.close();
   }
 }
 
@@ -874,6 +817,8 @@ async function runPreserve(browser, url) {
     localStorage.setItem("stock-tracker-theme", "light");
   }, { v3: v3, v2: v2, pre: pre, pre3: pre3 });
   const page = await context.newPage();
+  const preserveErrors = [];
+  watchOrigin(page, preserveErrors, new URL(url).origin);
   try {
     await page.goto(url, { waitUntil: "load" });
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "rename title");
@@ -895,6 +840,7 @@ async function runPreserve(browser, url) {
     assert(stored.pre3 === pre3, "premigration v3 bytes changed");
     assert(stored.theme === "light", "theme key changed");
     assert((await page.locator("html").getAttribute("data-theme")) === "light", "theme applied");
+    if (preserveErrors.length) throw new Error(preserveErrors.join("\n"));
     console.log("preservation passed");
   } finally {
     await context.close();
@@ -982,7 +928,7 @@ async function runShots(browser, url, journal) {
     ["desktop", { width: 1440, height: 900 }]
   ];
   const sections = [
-    ["markets", "Markets", "investor_markets"],
+    ["markets", "Symbols", "investor_markets"],
     ["positions", "Trades", "investor_trades"],
     ["risk", "Risk", "investor_risk"],
     ["analytics", "Analytics", "investor_analytics"],
@@ -1012,13 +958,6 @@ async function runShots(browser, url, journal) {
       for (const section of sections) {
         await page.getByRole("tab", { name: section[1] }).click();
         await page.waitForSelector("#view-" + section[0] + ":not([hidden])");
-        if (section[0] === "markets") {
-          await page.waitForFunction(function () {
-            const el = document.getElementById("chartMount");
-            const widgetState = el && el.getAttribute("data-widget-state");
-            return widgetState === "loaded" || widgetState === "fallback" || widgetState === "empty";
-          }, null, { timeout: 12000 });
-        }
         if (section[0] === "risk") {
           await page.locator("#riskAccount").fill("10000");
           await page.locator("#riskPercent").fill("1");

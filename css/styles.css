@@ -1005,33 +1005,8 @@ fieldset label { margin-bottom: 0.45rem; }
 }
 
 .button-row.tight { margin: 0; }
-.symbol-bar, .period-bar, .chip-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: end; }
+.symbol-bar, .chip-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: end; }
 .symbol-bar label { min-width: 7rem; }
-.period-bar button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--tab-active-bg);
-}
-.chart-mount {
-  height: 460px;
-  margin-top: 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--field);
-  overflow: hidden;
-  position: relative;
-}
-.tape-mount { min-height: 4.5rem; margin-top: 0.6rem; }
-.chart-loading, .chart-fallback {
-  margin: 0;
-  padding: 1.2rem 1rem;
-  color: var(--muted);
-}
-.chart-fallback strong { color: var(--text); }
-.chart-attrib { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.82rem; }
-.chart-attrib a { color: var(--accent); }
-.tradingview-widget-container__widget { height: 100%; }
-.chart-mount iframe, .tape-mount iframe { width: 100%; height: 100%; border: 0; }
-.tape-mount iframe { height: 88px; }
 .chip {
   min-height: 44px;
   border-radius: 999px;
@@ -1110,7 +1085,4 @@ fieldset label { margin-bottom: 0.45rem; }
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
-}
-@media (max-width: 640px) {
-  .chart-mount { height: 300px; }
 }

@@ -4,29 +4,25 @@ A local-first trading journal for any ticker. Static site, no build step, no acc
 
 Bryz Trades records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
 
-The only external script is TradingView’s official chart embed, loaded when Markets is open. It is not an API key, and Bryz Trades does not read prices out of it. Performance charts on Overview and Analytics are drawn from the journal in the page. They are not TradingView, and they do not use a chart library.
+Nothing on the page loads an outside script or frame. Performance charts on Overview and Analytics are drawn from the journal in the page. They do not use a chart library, and they are not prices.
 
 ## Screens
 
-Overview, Markets, Trades, Risk, Analytics, Calendar, and Settings. On a phone the sections sit in a bottom bar with icons. From 700px the same list is an icon rail, and from 1100px the labels sit beside the icons. The wordmark and the Bryz Trades mark stay in the top bar with the period, Log trade, and the theme button. Type is Inter, self-hosted under `assets/fonts/` (SIL Open Font License, see `assets/fonts/OFL.txt`). Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
+Overview, Symbols, Trades, Risk, Analytics, Calendar, and Settings. On a phone the sections sit in a bottom bar with icons. From 700px the same list is an icon rail, and from 1100px the labels sit beside the icons. The wordmark and the Bryz Trades mark stay in the top bar with the period, Log trade, and the theme button. Type is Inter, self-hosted under `assets/fonts/` (SIL Open Font License, see `assets/fonts/OFL.txt`). Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
 
 The first visit starts with SOFI as an open long at the old checklist levels ($18.00 / $18.00 / $16.92). If this browser still has the previous tracker or the original SOFI card, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
 
 ## Symbols, watchlist, and filters
 
-Any ticker or ETF that fits a symbol such as `AAPL`, `BRK.B`, or `SOFI` can be recorded. The chart box also accepts an optional exchange (`NASDAQ`, `NYSE`). A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
+Any ticker or ETF that fits a symbol such as `AAPL`, `BRK.B`, or `SOFI` can be recorded. Symbols also accepts an optional exchange (`NASDAQ`, `NYSE`) stored with the watchlist. A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
 
-The Markets watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol loads its chart and the symbol detail. Detail shows realized results for that symbol. Market price and portfolio market value stay **N/A**. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date. A missing mark is unavailable, not a live quote.
+The watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol shows that ticker’s closed P/L, win rate, and trade count, plus open positions with the stops and targets you recorded. There is no live price. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date. A missing mark is unavailable, not a quote.
 
 Trades filter by status, symbol, direction, strategy, and date. A date filter keeps a trade when its entry date, exit date, or a partial-exit date falls in the range. Analytics uses the same symbol and status filters on top of the exit-date range. Filtering does not delete anything. Open is the status for a position that is not realized, including one that only has a plan.
 
-## Chart
+## Charts
 
-Markets loads TradingView’s Advanced Chart from `https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js` only, and the watchlist tape from `https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js` only. Nothing else is loaded from a CDN. No chart library is vendored.
-
-The price chart is created when Markets is showing. Period buttons are 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, and MAX. The widget theme follows the light or dark theme. The chart is attributed to TradingView, and the data may be delayed. The embed runs in a sandboxed frame so it cannot read or clear the journal in this page’s storage. If the script is blocked or does not paint within 8 seconds, the page shows a fallback and leaves your trades alone. Chart prices are never copied into an entry, an exit, or a mark.
-
-Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity.
+Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity. The page does not load a market-data script or embed.
 
 ## Statuses
 
