@@ -18,13 +18,10 @@
       if (meta) meta.setAttribute("content", theme === "light" ? "#f4f7fb" : "#070b12");
     })();
   </script>
-  <meta name="description" content="Ladder — positions and daily gains and losses. Not financial advice." />
+  <meta name="description" content="Ladder — a local trading journal. Not financial advice." />
   <meta name="apple-mobile-web-app-title" content="Ladder" />
   <title>Ladder</title>
   <link rel="icon" href="assets/ladder-logo.svg" type="image/svg+xml" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -41,116 +38,306 @@
           </svg>
           <h1>Ladder</h1>
         </div>
-        <p class="sub">Positions and daily results. <strong>Not financial advice.</strong> Does not place trades.</p>
+        <p class="sub">A local trading journal. <strong>Not financial advice.</strong> Does not place trades or read the market.</p>
       </div>
       <div class="header-actions">
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode">Dark</button>
-        <button type="button" id="exportBtn">Export</button>
-        <button type="button" id="importBtn">Import</button>
-        <input type="file" id="importFile" accept="application/json,.json" hidden />
       </div>
     </header>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
-    <div class="views">
-      <section id="positionsView" class="view" role="tabpanel" aria-label="Positions">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Positions</h2>
-            <button type="button" id="addTickerBtn" class="primary">Add stock</button>
-          </div>
-          <p class="hint">Shares, average cost, and an optional close checklist for each ticker.</p>
-          <div id="positionsList"></div>
-        </div>
-      </section>
+    <div class="shell">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Dashboard</button>
+        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Positions</button>
+        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
+        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics">Analytics</button>
+        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
+      </nav>
 
-      <section id="calendarView" class="view active" role="tabpanel" aria-label="Calendar">
-        <div class="panel">
-          <div class="month-nav">
-            <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
-            <h2 id="monthLabel">Month</h2>
-            <button type="button" id="nextMonth" aria-label="Next month">›</button>
+      <main class="views">
+        <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Dashboard</h2>
+            </div>
+            <p class="hint">Realized figures use closed trades only. Open positions are counts, not profits. This is not account equity.</p>
+            <div id="dashboardBody"></div>
           </div>
-          <div class="month-actions">
-            <button type="button" id="todayBtn" hidden>Today</button>
-            <button type="button" id="logTodayBtn" class="primary">Log today</button>
+        </section>
+
+        <section id="view-positions" class="view" role="tabpanel" aria-labelledby="tab-positions" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Positions</h2>
+              <button type="button" id="addTradeBtn" class="primary">Add trade</button>
+            </div>
+            <p class="hint">Each card is a trade you recorded. A target or hard stop is a plan, not an exit.</p>
+            <details class="legend">
+              <summary>What the statuses mean</summary>
+              <ul>
+                <li><strong>Open — not realized.</strong> Still in the journal. Excluded from realized profit and loss.</li>
+                <li><strong>Closed — recorded exit.</strong> Uses the exit price, fees, and exit date you entered. Ladder does not check the market.</li>
+                <li><strong>Cancelled — not realized.</strong> Excluded from realized profit and loss.</li>
+              </ul>
+            </details>
+            <label class="inline-field">Show
+              <select id="positionFilter">
+                <option value="all">All trades</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <div id="positionsList"></div>
           </div>
-          <div id="summary" aria-live="polite"></div>
-          <div id="calendarGrid" class="calendar" role="group"></div>
-          <p class="hint calendar-hint">Tap a day. One gain or loss is enough — a note or a per-stock split is optional.</p>
-          <div id="weekList"></div>
-        </div>
-      </section>
+        </section>
+
+        <section id="view-calendar" class="view" role="tabpanel" aria-labelledby="tab-calendar" hidden>
+          <div class="panel">
+            <div class="month-nav">
+              <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
+              <h2 id="monthLabel">Month</h2>
+              <button type="button" id="nextMonth" aria-label="Next month">›</button>
+            </div>
+            <div class="month-actions">
+              <button type="button" id="todayBtn" hidden>Today</button>
+              <button type="button" id="logTodayBtn" class="primary">Log today</button>
+            </div>
+            <div id="summary" aria-live="polite"></div>
+            <div id="calendarGrid" class="calendar" role="group"></div>
+            <p class="hint calendar-hint">T is closed trades. M is a manual entry. They are never added together. A blank day is unrecorded. $0 is a recorded flat. Adj is an account adjustment, not trading P/L.</p>
+            <div id="weekList"></div>
+          </div>
+        </section>
+
+        <section id="view-analytics" class="view" role="tabpanel" aria-labelledby="tab-analytics" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Analytics</h2>
+            </div>
+            <p class="hint">Every metric below uses the same closed trades: a recorded exit price, quantity, and exit date in the range. Open trades are not estimates of profit.</p>
+            <div class="range-bar">
+              <label>Range
+                <select id="rangePreset">
+                  <option value="ytd">Year to date</option>
+                  <option value="month">This month</option>
+                  <option value="all">All dated closes</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>From
+                <input id="rangeFrom" type="date" />
+              </label>
+              <label>To
+                <input id="rangeTo" type="date" />
+              </label>
+            </div>
+            <p id="rangeHint" class="hint"></p>
+            <div id="analyticsBody"></div>
+          </div>
+        </section>
+
+        <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Settings and backup</h2>
+            </div>
+            <h3 class="section-title">Backup</h3>
+            <p class="hint">The file stays on this device unless you move it yourself. Ladder does not upload it.</p>
+            <div class="button-row">
+              <button type="button" id="exportJsonBtn" class="primary">Export JSON</button>
+              <button type="button" id="exportTradesCsvBtn">Trades CSV</button>
+              <button type="button" id="exportDaysCsvBtn">Days CSV</button>
+            </div>
+            <h3 class="section-title">Restore</h3>
+            <p class="hint">Import checks the file before it changes anything. Merge keeps this journal and adds what is new. Replace swaps in the file after a backup is stored here. Matching trade ids are not counted twice.</p>
+            <div class="button-row">
+              <button type="button" id="importBtn">Choose JSON file</button>
+              <input type="file" id="importFile" accept="application/json,.json" hidden />
+            </div>
+            <h3 class="section-title">Risk calculator</h3>
+            <p class="hint" id="riskDisclaimer">Optional planning math from the numbers you type. It is not financial advice and does not place an order. Actual losses can exceed the planned risk because of gaps, slippage, fees, and execution.</p>
+            <div class="row-2">
+              <label>Account size ($)
+                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
+              </label>
+              <label>Risk percent
+                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Entry price ($)
+                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
+              </label>
+              <label>Stop price ($)
+                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
+              </label>
+            </div>
+            <label>Direction
+              <select id="riskDirection">
+                <option value="long">Long</option>
+                <option value="short">Short</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
+            <div class="button-row">
+              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
+            </div>
+            <div id="riskResult" class="result-box" role="status"></div>
+            <h3 class="section-title">How saving works</h3>
+            <div id="storageHelp" class="prose">
+              <p>The journal is stored in this browser’s local storage on this device. It is not an account, and it is not sent to a server.</p>
+              <p>Another browser, another device, or a private-browsing window has its own empty copy. Private browsing may delete the journal when the window closes.</p>
+              <p>Clearing site data, cookies, or history for this site deletes the journal. Export a JSON backup first if the records matter.</p>
+              <p>A failed save or a failed import leaves the previous copy in place. Before an upgrade or import, Ladder also keeps a backup copy in this browser.</p>
+              <p id="schemaLine">Schema version 2.</p>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
 
-    <p class="footer-note">Saved in this browser only. Export a JSON backup before you clear site data. No live prices, and nothing here buys or sells.</p>
+    <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. No live prices, and nothing here buys or sells.</p>
   </div>
 
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button type="button" role="tab" id="tabCalendar" data-tab="calendar" class="active" aria-selected="true">Calendar</button>
-    <button type="button" role="tab" id="tabPositions" data-tab="positions" aria-selected="false">Positions</button>
-  </nav>
-
-  <dialog id="tickerDialog" aria-labelledby="tickerDialogTitle">
-    <form id="tickerForm">
+  <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">
+    <form id="tradeForm">
       <div class="dialog-head">
-        <h2 id="tickerDialogTitle">Add stock</h2>
+        <h2 id="tradeDialogTitle">Add trade</h2>
         <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
       </div>
-      <p class="dialog-lead">Ticker, shares, and average cost. Levels are optional.</p>
-      <label>Ticker
-        <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="SOFI" required />
-      </label>
-      <div class="row-2">
-        <label>Shares
-          <input id="fieldShares" type="number" inputmode="decimal" min="0" step="any" placeholder="50" />
-        </label>
-        <label>Average cost ($)
-          <input id="fieldAvg" type="number" inputmode="decimal" min="0" step="0.01" placeholder="18.00" />
-        </label>
-      </div>
-      <label>Notes
-        <textarea id="fieldNotes" rows="2" maxlength="500" placeholder="Optional"></textarea>
-      </label>
-      <details id="levelsDetails">
-        <summary>Levels checklist</summary>
-        <p class="hint">Optional. Paste the official close, not a live quote. Hard stop beats get-out. This does not place or cancel orders.</p>
+      <p id="tradeStatusHelp" class="dialog-lead"></p>
+      <div id="tradeResult" class="result-box" hidden></div>
+      <fieldset id="tradeFields">
         <div class="row-2">
-          <label>Get-in ($)
-            <input id="fieldGetIn" type="number" inputmode="decimal" min="0" step="0.01" />
+          <label>Ticker
+            <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="SOFI" required />
           </label>
-          <label>Get-out ($)
-            <input id="fieldGetOut" type="number" inputmode="decimal" min="0" step="0.01" />
+          <label>Asset name
+            <input id="fieldName" maxlength="80" autocomplete="off" placeholder="Optional" />
           </label>
         </div>
-        <label>Hard stop ($)
-          <input id="fieldHardStop" type="number" inputmode="decimal" min="0" step="0.01" />
-        </label>
         <div class="row-2">
-          <label>Limit status
-            <select id="fieldOrder">
-              <option value="">Not using</option>
-              <option value="waiting">waiting</option>
-              <option value="filled">filled</option>
-              <option value="cancelled">cancelled</option>
+          <label>Direction
+            <select id="fieldDirection">
+              <option value="long">Long</option>
+              <option value="short">Short</option>
             </select>
           </label>
-          <label>Fill price ($)
-            <input id="fieldFill" type="number" inputmode="decimal" min="0" step="0.01" placeholder="only if filled" disabled />
+          <label>Status
+            <select id="fieldStatus">
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </label>
         </div>
-        <label>Official close ($)
-          <input id="fieldClose" type="number" inputmode="decimal" min="0" step="0.01" placeholder="paste today's close" />
-        </label>
-        <div id="statusPreview" class="status wait" hidden>
-          <div class="status-label">Status</div>
-          <div class="status-line" id="statusPreviewLine"></div>
+        <div class="row-2">
+          <label>Shares
+            <input id="fieldShares" inputmode="decimal" autocomplete="off" placeholder="50 or 0.5" />
+          </label>
+          <label>Fees ($)
+            <input id="fieldFees" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+          </label>
         </div>
-      </details>
-      <p id="tickerError" class="form-error" hidden></p>
+        <div class="row-2">
+          <label>Entry price ($)
+            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="18.00" />
+          </label>
+          <label>Average entry cost ($)
+            <input id="fieldAvg" inputmode="decimal" autocomplete="off" placeholder="Optional" />
+          </label>
+        </div>
+        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin.</p>
+        <div class="row-2">
+          <label>Planned target ($)
+            <input id="fieldTarget" inputmode="decimal" autocomplete="off" />
+          </label>
+          <label>Planned hard stop ($)
+            <input id="fieldHardStop" inputmode="decimal" autocomplete="off" />
+          </label>
+        </div>
+        <div class="row-2">
+          <label>Entry date
+            <input id="fieldEntryDate" type="date" />
+          </label>
+          <label>Exit date
+            <input id="fieldExitDate" type="date" />
+          </label>
+        </div>
+        <div class="row-2">
+          <label>Closing price ($)
+            <input id="fieldExit" inputmode="decimal" autocomplete="off" placeholder="Recorded exit" />
+          </label>
+          <label>Recorded exit reason
+            <select id="fieldExitReason">
+              <option value="">Not recorded</option>
+              <option value="target">Recorded as target exit</option>
+              <option value="stop">Recorded as stop exit</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">The closing price is the exit you write down. Choosing a target or stop reason does not mean the market reached that level.</p>
+        <div class="row-2">
+          <label>Strategy
+            <input id="fieldStrategy" maxlength="80" autocomplete="off" />
+          </label>
+          <label>Setup
+            <input id="fieldSetup" maxlength="80" autocomplete="off" />
+          </label>
+        </div>
+        <label>Thesis
+          <textarea id="fieldThesis" rows="2" maxlength="2000"></textarea>
+        </label>
+        <label>Lessons learned
+          <textarea id="fieldLessons" rows="2" maxlength="2000"></textarea>
+        </label>
+        <label>Notes
+          <textarea id="fieldNotes" rows="2" maxlength="2000"></textarea>
+        </label>
+        <details id="levelsDetails">
+          <summary>Levels checklist</summary>
+          <p class="hint">Optional, and only a comparison with a close you paste. Hard stop is checked before get-out. A close equal to a level is not under it. This does not place or cancel orders.</p>
+          <div class="row-2">
+            <label>Get-in ($)
+              <input id="fieldGetIn" inputmode="decimal" autocomplete="off" />
+            </label>
+            <label>Get-out ($)
+              <input id="fieldGetOut" inputmode="decimal" autocomplete="off" />
+            </label>
+          </div>
+          <div class="row-2">
+            <label>Limit status
+              <select id="fieldOrder">
+                <option value="">Not using</option>
+                <option value="waiting">waiting</option>
+                <option value="filled">filled</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </label>
+            <label>Fill price ($)
+              <input id="fieldFill" inputmode="decimal" autocomplete="off" placeholder="only if filled" disabled />
+            </label>
+          </div>
+          <label>Official close you paste ($)
+            <input id="fieldClose" inputmode="decimal" autocomplete="off" placeholder="not a live quote" />
+          </label>
+          <div id="statusPreview" class="status wait" hidden>
+            <div class="status-label">Checklist</div>
+            <div class="status-line" id="statusPreviewLine"></div>
+            <p class="hint" id="statusPreviewDetail"></p>
+          </div>
+        </details>
+      </fieldset>
+      <p id="tradeError" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions">
-        <button type="submit" class="primary" id="tickerSaveBtn">Add stock</button>
+        <button type="submit" class="primary" id="tradeSaveBtn">Save trade</button>
+        <button type="button" id="tradeEditBtn" hidden>Edit</button>
+        <button type="button" id="tradeCloseBtn" hidden>Close trade</button>
+        <button type="button" id="tradeDeleteBtn" hidden>Delete</button>
         <button type="button" data-close-dialog>Cancel</button>
       </div>
     </form>
@@ -162,36 +349,80 @@
         <h2 id="dayDialogTitle">Day</h2>
         <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
       </div>
-      <p class="dialog-lead">Enter the whole day. A note or a per-stock split is optional.</p>
-      <div class="sign-toggle" role="group" aria-label="Gain or loss">
+      <p class="dialog-lead">Closed trades and manual entries stay on separate lines. Ladder does not add them together.</p>
+      <div id="dayTrades" class="result-box"></div>
+      <h3 class="section-title">Manual entry</h3>
+      <p class="hint">A hand-typed day result from before trade-level tracking, or an account note you want to keep. It is labeled manual and is not a closed trade.</p>
+      <div class="sign-toggle" role="group" aria-label="Manual gain or loss">
         <button type="button" id="signGain" aria-pressed="true">Gain</button>
         <button type="button" id="signLoss" aria-pressed="false">Loss</button>
       </div>
-      <label>Amount ($)
-        <input id="dayAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+      <label>Manual amount ($)
+        <input id="dayAmount" inputmode="decimal" autocomplete="off" placeholder="Leave blank if none" />
       </label>
       <label>Note
-        <textarea id="dayNote" rows="2" maxlength="500" placeholder="Optional"></textarea>
+        <textarea id="dayNote" rows="2" maxlength="2000" placeholder="Optional"></textarea>
       </label>
       <div class="split-head">
-        <p class="section-title">Split by stock</p>
+        <p class="section-title">Split the manual entry</p>
         <button type="button" id="addSplitBtn">Add split</button>
       </div>
+      <p class="hint">This split only describes the manual amount. It is not added to realized P/L.</p>
       <div id="splitRows"></div>
       <p id="splitHint" class="hint"></p>
-      <p id="dayError" class="form-error" hidden></p>
+      <h3 class="section-title">Account adjustment</h3>
+      <p class="hint">A deposit, withdrawal, or other account change. It is not trading profit or loss and is not added to either total.</p>
+      <label>Adjustment amount ($)
+        <input id="dayAdjustment" inputmode="decimal" autocomplete="off" placeholder="0.00 or -10" />
+      </label>
+      <label>Adjustment note
+        <input id="dayAdjustmentNote" maxlength="500" autocomplete="off" />
+      </label>
+      <p id="dayError" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions">
         <button type="submit" class="primary">Save day</button>
-        <button type="button" id="clearDayBtn" hidden>Clear day</button>
+        <button type="button" id="clearDayBtn" hidden>Clear manual day</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="importDialog" aria-labelledby="importDialogTitle">
+    <form id="importForm">
+      <div class="dialog-head">
+        <h2 id="importDialogTitle">Import backup</h2>
+        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+      </div>
+      <div id="importSummary" class="prose"></div>
+      <fieldset>
+        <legend>How to apply it</legend>
+        <label class="check"><input type="radio" name="importMode" value="merge" checked /> Merge — add what is new and keep this journal</label>
+        <label class="check"><input type="radio" name="importMode" value="replace" /> Replace — swap in the file</label>
+      </fieldset>
+      <label class="check"><input type="checkbox" id="importOverwrite" /> Overwrite saved trades that share an id</label>
+      <label class="check"><input type="checkbox" id="importSimilar" /> Also import closed trades that look the same as ones already counted</label>
+      <fieldset>
+        <legend>Manual days on the same date</legend>
+        <label class="check"><input type="radio" name="importDays" value="keep" checked /> Keep the saved manual day</label>
+        <label class="check"><input type="radio" name="importDays" value="file" /> Use the file’s manual day</label>
+      </fieldset>
+      <p class="hint">Same-day amounts are not added together. Similar closed trades are skipped unless you check the box, so a second copy does not inflate results.</p>
+      <label class="check" id="replaceConfirmLabel" hidden><input type="checkbox" id="replaceConfirm" /> I understand replace removes saved trades that are not in this file. A backup of the current journal is stored in this browser first.</label>
+      <p id="importError" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" class="primary" id="importApply">Merge into this journal</button>
+        <button type="button" data-close-dialog>Cancel</button>
       </div>
     </form>
   </dialog>
 
   <noscript><p class="footer-note">Ladder needs JavaScript. It still stays on this device — there is no account.</p></noscript>
-  <script src="js/theme.js"></script>
+  <script src="js/money.js"></script>
+  <script src="js/calc.js"></script>
+  <script src="js/schema.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/format.js"></script>
   <script src="js/logic.js"></script>
-  <script src="js/storage.js"></script>
+  <script src="js/theme.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 </body>
