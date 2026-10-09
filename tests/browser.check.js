@@ -310,10 +310,12 @@ async function assertMobileChrome(page, label) {
   });
   assert(info.sameRow, label + " theme toggle shares the header row");
   assert(!info.labelClipped, label + " Analytics label is clipped");
-  if (width < 900) {
+  if (width < 700) {
     assert(info.position === "fixed", label + " nav position " + info.position);
     assert(Math.abs(info.bottom - info.height) < 2, label + " nav bottom " + info.bottom + " vs " + info.height);
     assert(info.pad + 1 >= info.navH, label + " content pad " + info.pad + " is under nav " + info.navH);
+  } else if (width < 1100) {
+    assert(info.position !== "fixed", label + " tablet rail is not a bottom bar");
   }
 }
 
@@ -347,6 +349,7 @@ async function main() {
     await runPreserve(browser, url);
     await runPagesBase(browser, url);
     await runShots(browser, url, demoJournal(now));
+    await runProShots(browser, url, proJournal(now));
     console.log("browser checks passed");
   } finally {
     await browser.close();
@@ -1033,6 +1036,116 @@ async function runShots(browser, url, journal) {
     }
   }
   console.log("screenshots saved");
+}
+
+function proJournal(now) {
+  const year = now.getFullYear();
+  const specs = [
+    ["01-08", "AAPL", "long", 10, 180, 188, 1.5, "breakout"],
+    ["01-15", "MSFT", "long", 6, 400, 392, 1, "pullback"],
+    ["01-22", "NVDA", "long", 4, 130, 142, 1.25, "momentum"],
+    ["02-03", "TSLA", "short", 3, 240, 228, 1, "fade"],
+    ["02-12", "AMD", "long", 8, 150, 150, 0, "range"],
+    ["02-20", "SOFI", "long", 20, 16, 14.5, 0.4, "breakout"],
+    ["03-04", "QQQ", "long", 5, 480, 496, 1, "trend"],
+    ["03-18", "AAPL", "long", 8, 185, 191, 1, "breakout"],
+    ["04-02", "NVDA", "short", 2, 140, 148, 0.8, "fade"],
+    ["04-16", "MSFT", "long", 4, 410, 424, 1, "trend"],
+    ["05-06", "AMD", "long", 10, 155, 149, 1, "pullback"],
+    ["05-21", "SOFI", "long", 30, 15, 17.2, 0.6, "breakout"],
+    ["06-09", "TSLA", "long", 4, 220, 236, 1.2, "momentum"],
+    ["06-24", "QQQ", "long", 3, 500, 508, 0.8, "trend"],
+    ["07-08", "AAPL", "long", 12, 195, 202, 1.4, "breakout"],
+    ["07-22", "NVDA", "long", 3, 145, 138, 0.9, "momentum"],
+    ["08-05", "MSFT", "short", 2, 430, 418, 1, "fade"],
+    ["08-19", "AMD", "long", 6, 160, 171, 0.7, "range"],
+    ["09-03", "SOFI", "long", 25, 17, 18.4, 0.5, "breakout"],
+    ["09-17", "QQQ", "long", 4, 520, 512, 1, "trend"],
+    ["09-30", "TSLA", "long", 3, 250, 261, 1, "momentum"],
+    ["10-01", "SOFI", "long", 15, 18, 19.1, 0.4, "breakout"],
+    ["10-02", "AAPL", "long", 6, 200, 196, 1, "pullback"],
+    ["10-05", "NVDA", "long", 2, 150, 146, 0.8, "momentum"],
+    ["10-06", "MSFT", "long", 3, 420, 428, 1, "trend"],
+    ["10-07", "QQQ", "long", 2, 530, 536, 0.6, "trend"],
+    ["10-08", "AMD", "long", 5, 165, 170, 0.5, "range"]
+  ];
+  const trades = specs.map(function (row, index) {
+    const long = row[2] === "long";
+    return {
+      id: "pro-" + index,
+      symbol: row[1],
+      direction: row[2],
+      status: "closed",
+      quantity: row[3],
+      entryPrice: row[4],
+      exitPrice: row[5],
+      fees: row[6],
+      entryDate: year + "-" + row[0],
+      exitDate: year + "-" + row[0],
+      strategy: row[7],
+      exitReason: row[5] === row[4] ? "other" : (long ? (row[5] > row[4] ? "target" : "stop") : (row[5] < row[4] ? "target" : "stop")),
+      hardStop: long ? Math.round(row[4] * 0.95 * 100) / 100 : Math.round(row[4] * 1.05 * 100) / 100,
+      targetPrice: long ? Math.round(row[4] * 1.08 * 100) / 100 : Math.round(row[4] * 0.92 * 100) / 100
+    };
+  });
+  trades.push({
+    id: "pro-open",
+    symbol: "NVDA",
+    name: "NVIDIA",
+    direction: "long",
+    status: "open",
+    quantity: 5,
+    entryPrice: 150,
+    hardStop: 142,
+    entryDate: year + "-10-02",
+    strategy: "momentum",
+    thesis: "Still open. Not a realized result."
+  });
+  return {
+    schemaVersion: 2,
+    settings: { accountSize: 50000, riskPercent: 1, selectedSymbol: "NVDA", selectedExchange: "NASDAQ", chartPeriod: "6M" },
+    trades: trades,
+    days: {}
+  };
+}
+
+async function runProShots(browser, url, journal) {
+  const shots = [
+    ["desktop", { width: 1440, height: 900 }, [
+      ["Overview", "pro_overview_desktop.png"],
+      ["Analytics", "pro_analytics_desktop.png"],
+      ["Trades", "pro_trades_desktop.png"],
+      ["Calendar", "pro_calendar_desktop.png"]
+    ]],
+    ["phone", { width: 390, height: 844 }, [
+      ["Overview", "pro_overview_phone.png"],
+      ["Trades", "pro_trades_phone.png"]
+    ]]
+  ];
+  for (const size of shots) {
+    const opened = await openPage(browser, url, size[1], "dark", journal);
+    const page = opened.page;
+    try {
+      for (const shot of size[2]) {
+        await page.getByRole("tab", { name: shot[0] }).click();
+        await page.waitForTimeout(200);
+        await page.evaluate(function () {
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+          const tip = document.getElementById("chartTip");
+          if (tip) tip.hidden = true;
+        });
+        await noOverflow(page, "pro " + size[0] + " " + shot[0]);
+        await page.screenshot({
+          path: "/opt/cursor/artifacts/" + shot[1],
+          fullPage: size[1].width >= 900
+        });
+      }
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
+    }
+  }
+  console.log("pro screenshots saved");
 }
 
 main().catch(function (err) {

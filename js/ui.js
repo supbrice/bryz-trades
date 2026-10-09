@@ -11,10 +11,22 @@
   let editingDayKey = null;
   let importPlan = null;
   let bannerTimer = 0;
+  let tradeSort = { key: "date", dir: "desc" };
+  const PAGE_TITLES = {
+    dashboard: "Overview",
+    markets: "Markets",
+    positions: "Trades",
+    risk: "Risk",
+    analytics: "Analytics",
+    calendar: "Calendar",
+    settings: "Settings"
+  };
 
   ST.bind = function (next) {
     handlers = next;
     document.getElementById("addTradeBtn").addEventListener("click", function () { handlers.addTrade(); });
+    document.getElementById("topLogTrade").addEventListener("click", function () { handlers.addTrade(); });
+    document.getElementById("drawerClose").addEventListener("click", closeDrawer);
     document.getElementById("prevMonth").addEventListener("click", function () { handlers.shiftMonth(-1); });
     document.getElementById("nextMonth").addEventListener("click", function () { handlers.shiftMonth(1); });
     document.getElementById("todayBtn").addEventListener("click", function () { handlers.goToday(); });
@@ -140,6 +152,13 @@
       if (day) { handlers.openDay(day.dataset.day); return; }
       const review = event.target.closest("[data-review]");
       if (review) { handlers.reviewTrade(review.dataset.review); return; }
+      const sortBtn = event.target.closest("[data-sort]");
+      if (sortBtn) {
+        const key = sortBtn.getAttribute("data-sort");
+        tradeSort = { key: key, dir: tradeSort.key === key && tradeSort.dir === "desc" ? "asc" : "desc" };
+        drawPositions();
+        return;
+      }
       const edit = event.target.closest("[data-edit]");
       if (edit) { handlers.editTrade(edit.dataset.edit); return; }
       const closeTrade = event.target.closest("[data-close-trade]");
@@ -159,7 +178,9 @@
         return;
       }
       const dropWatch = event.target.closest("[data-remove-watch]");
-      if (dropWatch) handlers.removeWatch(dropWatch.dataset.removeWatch);
+      if (dropWatch) { handlers.removeWatch(dropWatch.dataset.removeWatch); return; }
+      const openTrade = event.target.closest("[data-open-trade]");
+      if (openTrade && !event.target.closest("button")) openDrawer(openTrade.getAttribute("data-open-trade"));
     });
     document.addEventListener("pointerover", function (event) {
       const hit = event.target.closest && event.target.closest("[data-tip]");
@@ -319,6 +340,9 @@
       btn.setAttribute("aria-selected", on ? "true" : "false");
       if (on && nav) revealTab(nav, btn);
     });
+    const title = document.getElementById("pageTitle");
+    if (title) title.textContent = PAGE_TITLES[state.tab] || "Overview";
+    if (state.tab !== "positions") closeDrawer();
     syncTabFade();
   }
 
@@ -371,17 +395,19 @@
     const periodNote = !bounds.ready
       ? bounds.message
       : (bounds.label + (bounds.start ? " · " + bounds.start + " – " + bounds.end : "") + " · not account equity");
+    const spark = sparkSvg(metrics && metrics.curve);
+    const delta = deltaHtml(bounds, metrics);
     const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + " wins · " + metrics.losses + " losses · " + metrics.breakevens + " flat");
     const openSub = openTrades.length ? "Not realized" : "None open";
     const planSub = planned.cents == null
       ? (planned.skipped ? "Stop not recorded" : "No open plan")
       : ((planned.equityPercent ? planned.equityPercent + " of saved account" : "From recorded stops") + (planned.skipped ? " · " + planned.skipped + " missing a stop" : ""));
     document.getElementById("dashboardBody").innerHTML =
-      (emptyJournal ? '<p class="empty">No trades recorded yet. Log a trade to see results. Sample numbers are not filled in.</p>' : "") +
+      (emptyJournal ? emptyState("No trades recorded yet. Log a trade to see results. Sample numbers are not filled in.") : "") +
       (!emptyJournal && !bounds.ready ? '<p class="empty">' + ST.escapeHtml(bounds.message) + "</p>" : "") +
       (!emptyJournal && bounds.ready && noCloses ? '<p class="empty">No closed trades in this period. Open positions are not shown as profit.</p>' : "") +
       '<div class="primary-metrics">' +
-        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodNote, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.") +
+        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodNote, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.", spark + delta) +
         kpiText("Win rate", metrics && metrics.winRate, winSub, "dashWinRate", "Wins divided by wins, losses, and breakevens. A breakeven is a net of zero and is not a win.") +
         kpiText("Open positions", String(openTrades.length), openSub, "dashOpen", "Positions still open. They are excluded from realized profit.") +
         kpiPlain("Planned risk", planned.cents, planSub, "dashPlanned", "Remaining shares times the distance from the recorded entry to the recorded stop. Missing stops are left out. This is not a live stop.") +
@@ -405,8 +431,55 @@
     drawWatchlist();
   }
 
-  function kpi(label, cents, sub, id, hero, about) {
-    return '<div class="stat' + (hero ? " hero" : "") + '" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + moneyHtml(cents) + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  function kpi(label, cents, sub, id, hero, about, extra) {
+    return '<div class="stat' + (hero ? " hero" : "") + '" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div><div class=\"kpi-main\">" + moneyHtml(cents) + (extra || "") + "</div>" + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  }
+
+  function emptyState(text) {
+    return '<p class="empty empty-hero"><svg class="empty-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><rect x="8" y="6" width="32" height="36" rx="4"></rect><path d="M16 16h16M16 24h16M16 32h10"></path></svg>' + ST.escapeHtml(text) + "</p>";
+  }
+
+  function priorWindow(bounds) {
+    if (!bounds.ready || !bounds.start || !bounds.end) return null;
+    const start = ST.parseDateKey(bounds.start);
+    const end = ST.parseDateKey(bounds.end);
+    if (!start || !end) return null;
+    const span = end.getTime() - start.getTime();
+    const prevEnd = new Date(start.getTime() - 86400000);
+    const prevStart = new Date(prevEnd.getTime() - span);
+    return { start: ST.dateKey(prevStart), end: ST.dateKey(prevEnd) };
+  }
+
+  function deltaHtml(bounds, metrics) {
+    const earlier = priorWindow(bounds);
+    if (!earlier || !metrics || typeof metrics.realizedNetCents !== "bigint") return "";
+    const prev = ST.analyze(state.data, earlier);
+    if (!prev.tradeCount || typeof prev.realizedNetCents !== "bigint") {
+      return '<p class="delta na">N/A <span>no closed trades in the prior window</span></p>';
+    }
+    const delta = metrics.realizedNetCents - prev.realizedNetCents;
+    return '<p class="delta ' + ST.pnlWord(delta) + '">' + ST.escapeHtml(ST.formatCents(delta)) + " <span>vs prior window</span></p>";
+  }
+
+  function sparkSvg(curve) {
+    if (!curve || curve.length < 2) return "";
+    const values = curve.map(function (point) { return Number(point.cents); });
+    const width = 88;
+    const height = 32;
+    let min = values[0];
+    let max = values[0];
+    values.forEach(function (value) {
+      if (value < min) min = value;
+      if (value > max) max = value;
+    });
+    const span = (max - min) || 1;
+    const d = values.map(function (value, index) {
+      const x = 1 + (index * (width - 2)) / (values.length - 1);
+      const y = height - 2 - ((value - min) * (height - 6)) / span;
+      return (index ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+    }).join(" ");
+    const tone = values[values.length - 1] >= values[0] ? "up" : "down";
+    return '<svg class="spark ' + tone + '" viewBox="0 0 ' + width + " " + height + '" aria-hidden="true" focusable="false"><path d="' + d + '"></path></svg>';
   }
 
   function kpiText(label, text, sub, id, about) {
@@ -516,14 +589,114 @@
     });
     const list = document.getElementById("positionsList");
     if (!state.data.trades.length) {
-      list.innerHTML = '<p class="empty">No trades yet. Add one to record a ticker, direction, and plan. Nothing is sent to a broker.</p>';
+      list.innerHTML = emptyState("No trades yet. Add one to record a ticker, direction, and plan. Nothing is sent to a broker.");
       return;
     }
     if (!trades.length) {
-      list.innerHTML = '<p class="empty">Nothing in this filter.</p>';
+      list.innerHTML = emptyState("Nothing in this filter.");
       return;
     }
-    list.innerHTML = trades.map(tradeCard).join("");
+    list.innerHTML = tradeTable(sortTradeRows(trades));
+  }
+
+  function tradeDate(trade) {
+    const result = ST.tradeResult(trade);
+    return (result && result.exitDate) || trade.exitDate || trade.entryDate || "";
+  }
+
+  function tradeNet(trade) {
+    const result = ST.tradeResult(trade);
+    return result && result.included ? result.netCents : null;
+  }
+
+  function sortTradeRows(trades) {
+    const dir = tradeSort.dir === "asc" ? 1 : -1;
+    return trades.slice().sort(function (a, b) {
+      if (tradeSort.key === "symbol") return dir * String(a.symbol).localeCompare(String(b.symbol));
+      if (tradeSort.key === "net") {
+        const left = tradeNet(a);
+        const right = tradeNet(b);
+        if (left == null && right == null) return 0;
+        if (left == null) return 1;
+        if (right == null) return -1;
+        if (left === right) return 0;
+        return left < right ? -dir : dir;
+      }
+      return dir * String(tradeDate(a)).localeCompare(String(tradeDate(b)));
+    });
+  }
+
+  function sortHead(key, label) {
+    const on = tradeSort.key === key;
+    const mark = on ? (tradeSort.dir === "asc" ? " ↑" : " ↓") : "";
+    return '<th><button type="button" data-sort="' + key + '" aria-pressed="' + (on ? "true" : "false") + '">' + label + mark + "</button></th>";
+  }
+
+  function tradeTable(trades) {
+    const body = trades.map(function (trade) {
+      const help = ST.STATUS_HELP[trade.status] || ST.STATUS_HELP.open;
+      const result = ST.tradeResult(trade);
+      const books = ST.positionAccounting(trade);
+      const entry = trade.entryPrice != null ? trade.entryPrice : trade.avgCost;
+      const checklist = ST.computeStatus(trade);
+      const net = result.included
+        ? '<span class="' + ST.pnlWord(result.netCents) + '">' + ST.escapeHtml(ST.formatCents(result.netCents)) + "</span>"
+        : '<span class="na">N/A</span>';
+      const side = trade.direction === "short" ? "Short" : "Long";
+      const status = books.partial ? "Open — partially exited" : help.summary;
+      const notes = [];
+      if (trade.name) notes.push(trade.name);
+      if (books.partial || (trade.exits && trade.exits.length)) {
+        notes.push("Remaining " + (books.remainingQty == null ? "N/A" : ST.formatShares(books.remainingQty)) + ". Realized on exits " + (books.realizedNetCents == null ? "N/A" : ST.formatCents(books.realizedNetCents)) + ".");
+      }
+      if (books.unrealizedReason === "manual-mark") {
+        notes.push("Unrealized " + ST.formatCents(books.unrealizedCents) + " at manual mark" + (books.markAsOf ? " as of " + books.markAsOf : " (as-of date not recorded)") + ".");
+      }
+      const closeBtn = trade.status === "open"
+        ? '<button type="button" data-close-trade="' + ST.escapeHtml(trade.id) + '">Close</button>'
+        : "";
+      return '<tr class="stock-card" data-open-trade="' + ST.escapeHtml(trade.id) + '">' +
+        '<td data-label="Ticker"><h3>' + ST.escapeHtml(trade.symbol) + ' <span class="dir">' + side + "</span></h3>" +
+          '<span class="side-pill ' + ST.escapeHtml(trade.direction) + '">' + side + "</span>" +
+          (checklist ? '<p class="pill ' + checklist.kind + '">' + ST.escapeHtml(checklist.text) + "</p>" : "") +
+          (notes.length ? '<p class="meta">' + ST.escapeHtml(notes.join(" ")) + "</p>" : "") +
+        "</td>" +
+        '<td data-label="Status"><span class="pill ' + trade.status + '">' + ST.escapeHtml(status) + "</span></td>" +
+        '<td class="num" data-label="Date">' + ST.escapeHtml(tradeDate(trade) || "N/A") + "</td>" +
+        '<td class="num" data-label="Qty">' + ST.escapeHtml(trade.quantity == null ? "N/A" : ST.formatShares(trade.quantity)) + "</td>" +
+        '<td class="num" data-label="Entry">' + ST.escapeHtml(entry == null ? "N/A" : ST.formatPlainMoney(entry)) + "</td>" +
+        '<td class="num" data-label="Exit">' + ST.escapeHtml(trade.exitPrice == null ? "N/A" : ST.formatPlainMoney(trade.exitPrice)) + "</td>" +
+        '<td class="num" data-label="Net">' + net + "</td>" +
+        '<td data-label="Actions"><div class="row-actions">' +
+          '<button type="button" data-edit="' + ST.escapeHtml(trade.id) + '">Edit</button>' +
+          closeBtn +
+          '<button type="button" data-remove="' + ST.escapeHtml(trade.id) + '">Delete</button>' +
+        "</div></td></tr>";
+    }).join("");
+    return '<div class="trade-scroll book-scroll"><table class="trade-table book"><thead><tr>' +
+      sortHead("symbol", "Ticker") +
+      "<th>Status</th>" +
+      sortHead("date", "Date") +
+      "<th>Qty</th><th>Entry</th><th>Exit</th>" +
+      sortHead("net", "Net") +
+      "<th>Actions</th></tr></thead><tbody>" + body + "</tbody></table></div>";
+  }
+
+  function openDrawer(id) {
+    const trade = state.data.trades.find(function (item) { return item.id === id; });
+    const drawer = document.getElementById("tradeDrawer");
+    if (!trade || !drawer) return;
+    document.getElementById("drawerTitle").textContent = trade.symbol + " " + (trade.direction === "short" ? "short" : "long");
+    document.getElementById("drawerBody").innerHTML = tradeCard(trade);
+    drawer.hidden = false;
+  }
+
+  function closeDrawer() {
+    const drawer = document.getElementById("tradeDrawer");
+    if (!drawer) return;
+    drawer.hidden = true;
+    const body = document.getElementById("drawerBody");
+    if (body) body.innerHTML = "";
   }
 
   function tradeCard(trade) {
@@ -656,6 +829,12 @@
       body.push('<div class="primary-metrics">' + metric("Realized net P/L", metrics.realizedNetCents, ST.METRIC_HELP.realizedNet, "metric-realized") + metricText("Win rate", metrics.winRate, ST.METRIC_HELP.winRate) + metricText("Profit factor", metrics.profitFactor, ST.METRIC_HELP.profitFactor) + metric("Avg P/L", metrics.avgTradeCents, ST.METRIC_HELP.avgTrade) + "</div>");
       body.push('<section class="chart-card"><div class="card-title"><h3>Realized P/L</h3>' + infoBtn(ST.METRIC_HELP.cumulative) + "</div>" + curveSvg(metrics.curve, metrics) + "</section>");
       body.push('<p class="hint">Closed-trade curve only. This is not account equity.</p>');
+      body.push('<div class="viz-grid">' +
+        '<section class="chart-card"><h3>Win / loss</h3>' + donutSvg(metrics) + "</section>" +
+        '<section class="chart-card"><h3>Avg win vs avg loss</h3>' + compareBars(metrics) + "</section>" +
+        '<section class="chart-card"><h3>By weekday</h3><p class="hint">Closed-trade net on the exit date’s weekday. Days with no closes are left off.</p>' + barSvg(weekdayPoints(metrics.curve), "Realized profit and loss by weekday") + "</section>" +
+        '<section class="chart-card"><h3>By ticker</h3>' + barSvg(metrics.byTicker.map(function (row) { return { label: row.label, cents: row.netCents }; }), "Realized profit and loss by ticker") + "</section>" +
+      "</div>");
       body.push('<div class="stat-grid">');
       body.push(compactCard("Monthly", monthCard(metrics)));
       body.push(compactCard("Trade stats", tradeStatsCard(metrics)));
@@ -990,6 +1169,7 @@
         marks += '<circle class="mark-loss" cx="' + xOf(index).toFixed(1) + '" cy="' + yOf(Number(point.cents)).toFixed(1) + '" r="5"></circle>';
       }
     });
+    const gid = "equityFill" + curve.length + String(end.cents);
     const endTip = tipText(end.date, end.cents);
     const label = "Cumulative closed-trade P/L from " + curve[0].date + " to " + end.date + ", ending at " + ST.formatCents(end.cents) + ". All-time high " + ST.formatCents(peak) + ". This is not account equity.";
     const legend = '<ul class="chart-legend"><li><span class="swatch ath"></span> All-time high ' + ST.escapeHtml(ST.formatCents(peak, "plain")) + "</li>" +
@@ -997,10 +1177,12 @@
       (worst && worst.cents < 0n ? '<li><span class="swatch loss"></span> Biggest loss ' + ST.escapeHtml(chartLabel(worst.date) + " " + ST.formatCents(worst.cents)) + "</li>" : "") +
       "<li>End " + ST.escapeHtml(endTip) + "</li></ul>";
     return '<svg class="curve" viewBox="0 0 ' + width + " " + height + '" role="group" aria-label="' + ST.escapeHtml(label) + '">' +
+      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B9F6CA" stop-opacity="0.38"></stop><stop offset="1" stop-color="#B9F6CA" stop-opacity="0"></stop></linearGradient></defs>' +
       grid +
       '<line class="ath" x1="' + left + '" y1="' + peakY.toFixed(1) + '" x2="' + (width - right) + '" y2="' + peakY.toFixed(1) + '"></line>' +
-      '<polygon class="area" points="' + area + '"></polygon>' +
+      '<polygon class="area" points="' + area + '" fill="url(#' + gid + ')"></polygon>' +
       '<polyline class="series" points="' + coords + '"></polyline>' +
+      '<line class="crosshair" x1="0" y1="' + top + '" x2="0" y2="' + (height - bottom) + '" visibility="hidden"></line>' +
       marks + hits + xLabels + "</svg>" + legend;
   }
 
@@ -1012,11 +1194,25 @@
     const rect = el.getBoundingClientRect();
     tip.style.left = (rect.left + rect.width / 2) + "px";
     tip.style.top = rect.top + "px";
+    document.querySelectorAll("svg.curve .crosshair").forEach(function (line) {
+      line.setAttribute("visibility", "hidden");
+    });
+    const svg = el.closest && el.closest("svg.curve");
+    if (!svg || !el.classList || !el.classList.contains("hit")) return;
+    const line = svg.querySelector(".crosshair");
+    if (!line) return;
+    const x = Number(el.getAttribute("x")) + Number(el.getAttribute("width")) / 2;
+    line.setAttribute("x1", String(x));
+    line.setAttribute("x2", String(x));
+    line.setAttribute("visibility", "visible");
   }
 
   function hideChartTip() {
     const tip = document.getElementById("chartTip");
     if (tip) tip.hidden = true;
+    document.querySelectorAll("svg.curve .crosshair").forEach(function (line) {
+      line.setAttribute("visibility", "hidden");
+    });
   }
 
   function weekHtml(weeks) {
@@ -1039,7 +1235,10 @@
         const detail = ST.dayDetail(state.data, day.key);
         const classes = ["day"];
         if (!day.inMonth) classes.push("out");
-        if (detail.tradeCents != null) classes.push(ST.pnlWord(detail.tradeCents));
+        if (detail.tradeCents != null) {
+          classes.push(ST.pnlWord(detail.tradeCents));
+          classes.push(heatClass(detail.tradeCents));
+        }
         else if (detail.manualCents != null) classes.push(ST.pnlWord(detail.manualCents));
         else if (detail.adjustmentCents != null) classes.push("adjust");
         if (ST.sameDay(day.date, state.today)) classes.push("today");
@@ -1051,6 +1250,65 @@
       }).join("");
     }).join("");
     return heads + cells;
+  }
+
+  function heatClass(cents) {
+    const abs = cents < 0n ? -cents : cents;
+    if (abs === 0n) return "heat-0";
+    if (abs < 5000n) return "heat-1";
+    if (abs < 25000n) return "heat-2";
+    if (abs < 100000n) return "heat-3";
+    return "heat-4";
+  }
+
+  function weekdayPoints(curve) {
+    const sums = [null, null, null, null, null, null, null];
+    (curve || []).forEach(function (point) {
+      const date = ST.parseDateKey(point.date);
+      if (!date || typeof point.dayCents !== "bigint") return;
+      const index = date.getDay();
+      sums[index] = sums[index] == null ? point.dayCents : sums[index] + point.dayCents;
+    });
+    return WEEKDAYS.map(function (name, index) {
+      return sums[index] == null ? null : { label: name, cents: sums[index] };
+    }).filter(Boolean);
+  }
+
+  function donutSvg(metrics) {
+    const parts = [
+      { n: metrics.wins, cls: "up", label: "Wins" },
+      { n: metrics.losses, cls: "down", label: "Losses" },
+      { n: metrics.breakevens, cls: "flat", label: "Breakeven" }
+    ];
+    const total = parts.reduce(function (sum, part) { return sum + part.n; }, 0);
+    if (!total) return '<p class="empty">No closed trades for a win/loss split.</p>';
+    const radius = 34;
+    const circ = 2 * Math.PI * radius;
+    let offset = 0;
+    const arcs = parts.filter(function (part) { return part.n > 0; }).map(function (part) {
+      const len = (part.n / total) * circ;
+      const node = '<circle class="' + part.cls + '" cx="50" cy="50" r="' + radius + '" fill="none" stroke-width="10" stroke-linecap="butt" stroke-dasharray="' + len.toFixed(2) + " " + (circ - len).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '"></circle>';
+      offset += len;
+      return node;
+    }).join("");
+    const label = parts.map(function (part) { return part.label + " " + part.n; }).join(", ");
+    const legend = '<ul class="chart-legend">' + parts.map(function (part) {
+      return "<li><span class=\"swatch " + (part.cls === "up" ? "win" : part.cls === "down" ? "loss" : "ath") + '"></span>' + part.label + " " + part.n + "</li>";
+    }).join("") + "</ul>";
+    return '<div class="donut-wrap"><svg class="donut" viewBox="0 0 100 100" role="img" aria-label="' + ST.escapeHtml(label) + '">' + arcs + "</svg>" + legend + "</div>";
+  }
+
+  function compareBars(metrics) {
+    if (typeof metrics.avgWinCents !== "bigint" || typeof metrics.avgLossCents !== "bigint") {
+      return '<p class="empty">Need at least one win and one loss. Nothing is filled in as zero.</p>';
+    }
+    const win = Number(metrics.avgWinCents);
+    const loss = Math.abs(Number(metrics.avgLossCents));
+    const max = Math.max(win, loss, 1);
+    function row(label, cents, width, cls) {
+      return '<div class="compare-row"><span>' + label + "</span><span class=\"compare-track\"><span class=\"" + cls + "\" style=\"width:" + width.toFixed(1) + '%\"></span></span><strong class="' + ST.pnlWord(cents) + '">' + ST.escapeHtml(ST.formatCents(cents)) + "</strong></div>";
+    }
+    return row("Avg win", metrics.avgWinCents, (win / max) * 100, "up") + row("Avg loss", metrics.avgLossCents, (loss / max) * 100, "down");
   }
 
   function daySpoken(day, detail) {

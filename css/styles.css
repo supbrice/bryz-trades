@@ -912,7 +912,7 @@ fieldset label { margin-bottom: 0.45rem; }
   vector-effect: non-scaling-stroke;
 }
 .curve .series.loss { stroke: var(--danger); }
-.curve .area { fill: var(--ok); opacity: 0.16; }
+.curve .area { opacity: 1; }
 .curve .area.loss { fill: var(--danger); }
 .curve .grid, .bars .grid { stroke: var(--line); stroke-width: 1; }
 .curve .ath, .bars .zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
@@ -1051,8 +1051,8 @@ fieldset label { margin-bottom: 0.45rem; }
   .trade-table, .trade-table tbody, .trade-table tr, .trade-table td { display: block; width: 100%; }
   .trade-table tr {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.15rem 0.85rem;
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
     border: 1px solid var(--line);
     border-radius: 12px;
     margin-top: 0.5rem;
@@ -1067,6 +1067,7 @@ fieldset label { margin-bottom: 0.45rem; }
     padding: 0.18rem 0;
     white-space: normal;
     min-width: 0;
+    overflow-wrap: anywhere;
   }
   .trade-table td::before {
     content: attr(data-label);
@@ -1084,8 +1085,8 @@ fieldset label { margin-bottom: 0.45rem; }
   .trade-table, .trade-table tbody, .trade-table tr, .trade-table td { display: block; width: 100%; }
   .trade-table tr {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.15rem 0.85rem;
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
     border: 1px solid var(--line);
     border-radius: 12px;
     margin-top: 0.5rem;
@@ -1100,6 +1101,7 @@ fieldset label { margin-bottom: 0.45rem; }
     padding: 0.18rem 0;
     white-space: normal;
     min-width: 0;
+    overflow-wrap: anywhere;
   }
   .trade-table td::before {
     content: attr(data-label);

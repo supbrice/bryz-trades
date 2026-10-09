@@ -28,9 +28,24 @@
   <link rel="icon" href="assets/bryz-trades-logo.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/pro.css" />
 </head>
 <body>
   <div class="app">
+    <aside class="sidebar">
+      <div class="tab-shell">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><span class="nav-label">Overview</span></button>
+        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 16l5-5 3 3 8-8"></path><path d="M14 6h6v6"></path></svg><span class="nav-label">Markets</span></button>
+        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h10"></path></svg><span class="nav-label">Trades</span></button>
+        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path></svg><span class="nav-label">Risk</span></button>
+        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path></svg><span class="nav-label">Analytics</span></button>
+        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span class="nav-label">Calendar</span></button>
+        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg><span class="nav-label">Settings</span></button>
+      </nav>
+      </div>
+    </aside>
+    <div class="workspace">
     <header class="topbar">
       <div class="brand-row">
         <div class="brand">
@@ -48,46 +63,38 @@
           <span class="visually-hidden" id="themeToggleLabel">Dark</span>
         </button>
       </div>
+      <div class="toolbar">
+        <h2 id="pageTitle">Overview</h2>
+        <div class="range-bar top-range">
+          <label>Period
+            <select id="overviewPreset">
+              <option value="ytd">Year to date</option>
+              <option value="month">This month</option>
+              <option value="all">All dated closes</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>From
+            <input id="overviewFrom" type="date" />
+          </label>
+          <label>To
+            <input id="overviewTo" type="date" />
+          </label>
+        </div>
+        <button type="button" id="topLogTrade" class="primary">Log trade</button>
+      </div>
       <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
     </header>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
     <div class="shell">
-      <div class="tab-shell">
-      <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Overview</button>
-        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets">Markets</button>
-        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Trades</button>
-        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk">Risk</button>
-        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics">Analytics</button>
-        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
-        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
-      </nav>
-      </div>
-
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
           <div class="panel">
             <div class="panel-head">
               <h2>Overview</h2>
               <button type="button" id="dashAddTrade" class="primary">Log trade</button>
-            </div>
-            <div class="range-bar">
-              <label>Period
-                <select id="overviewPreset">
-                  <option value="ytd">Year to date</option>
-                  <option value="month">This month</option>
-                  <option value="all">All dated closes</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </label>
-              <label>From
-                <input id="overviewFrom" type="date" />
-              </label>
-              <label>To
-                <input id="overviewTo" type="date" />
-              </label>
             </div>
             <p class="hint">Recorded exits only. A price you type is an estimate. A stop is a plan, not a market fill.</p>
             <div id="dashboardBody"></div>
@@ -331,6 +338,16 @@
 
     <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
     <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
+    <aside id="tradeDrawer" class="drawer" hidden>
+      <div class="drawer-card" role="dialog" aria-labelledby="drawerTitle">
+        <div class="drawer-head">
+          <h2 id="drawerTitle">Trade</h2>
+          <button type="button" id="drawerClose" class="icon-btn" aria-label="Close trade detail">×</button>
+        </div>
+        <div id="drawerBody"></div>
+      </div>
+    </aside>
+    </div>
   </div>
 
   <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">

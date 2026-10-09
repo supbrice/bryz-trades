@@ -8,7 +8,7 @@ The only external script is TradingView’s official chart embed, loaded when Ma
 
 ## Screens
 
-Overview, Markets, Trades, Risk, Analytics, Calendar, and Settings. On a phone the section list scrolls in the bottom bar. On a wider screen it sits in the side list. Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
+Overview, Markets, Trades, Risk, Analytics, Calendar, and Settings. On a phone the sections sit in a bottom bar with icons. From 700px the same list is an icon rail, and from 1100px the labels sit beside the icons. The wordmark and the Bryz Trades mark stay in the top bar with the period, Log trade, and the theme button. Type is Inter, self-hosted under `assets/fonts/` (SIL Open Font License, see `assets/fonts/OFL.txt`). Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
 
 The first visit starts with SOFI as an open long at the old checklist levels ($18.00 / $18.00 / $16.92). If this browser still has the previous tracker or the original SOFI card, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
 
