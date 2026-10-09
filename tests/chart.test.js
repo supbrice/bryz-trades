@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const chart = require("../js/chart.js");
 
-test("advanced chart config uses the official embed and Ladder's theme", () => {
+test("advanced chart config uses the official embed and the page theme", () => {
   assert.equal(chart.ADVANCED_CHART_URL, "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js");
   assert.equal(chart.TICKER_TAPE_URL, "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js");
   const dark = chart.chartWidgetConfig("aapl", "nasdaq", "1Y", "dark");

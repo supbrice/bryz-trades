@@ -277,6 +277,7 @@ async function main() {
     await runLarge(browser, url, today);
     await runUniversal(browser, url, today);
     await runChart(browser, url);
+    await runStoredV3(browser, url);
     await runShots(browser, url, demoJournal(now));
     console.log("browser checks passed");
   } finally {
@@ -291,7 +292,8 @@ async function runFlow(browser, url, today, viewport, label) {
   page.setDefaultTimeout(15000);
   page.on("dialog", function (dialog) { dialog.accept(); });
   try {
-    assert((await page.locator("h1").innerText()) === "Ladder", "title");
+    assert((await page.locator("h1").innerText()) === "Bryz Trades", "title");
+    assert((await page.title()) === "Bryz Trades", "document title");
     await page.getByRole("tab", { name: "Positions" }).click();
     await shows(page, "#positionsList", "SOFI");
     await shows(page, "#positionsList", "Open — not realized");
@@ -707,6 +709,64 @@ async function runChart(browser, url) {
     assert(journal && !journal.includes("\"markPrice\":1"), "no fabricated mark");
     if (errors.length) throw new Error(errors.join("\n"));
     console.log("chart failure state passed");
+  } finally {
+    await context.close();
+  }
+}
+
+async function runStoredV3(browser, url) {
+  const v3 = JSON.stringify({
+    schemaVersion: 3,
+    trades: [{
+      id: "ibm",
+      symbol: "IBM",
+      direction: "long",
+      status: "closed",
+      quantity: 2,
+      entryPrice: 10,
+      exitPrice: 11,
+      entryDate: "2026-05-01",
+      exitDate: "2026-05-02",
+      fees: 0
+    }],
+    days: {},
+    settings: { accountSize: 1000, riskPercent: 1 }
+  });
+  const v2 = "{\"schemaVersion\":2,\"app\":\"ladder\",\"trades\":[],\"days\":{}}";
+  const pre = "{\"reason\":\"before-schema-v2-migration\",\"raw\":\"untouched\"}";
+  const pre3 = "{\"reason\":\"before-schema-v3-migration\",\"raw\":\"untouched-v3\"}";
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(function (data) {
+    localStorage.clear();
+    localStorage.setItem("stock-tracker-theme", "dark");
+    localStorage.setItem("ladder-journal-v3", data.v3);
+    localStorage.setItem("ladder-journal-v2", data.v2);
+    localStorage.setItem("ladder-journal-premigration", data.pre);
+    localStorage.setItem("ladder-journal-premigration-v3", data.pre3);
+  }, { v3: v3, v2: v2, pre: pre, pre3: pre3 });
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: "load" });
+    await page.waitForSelector("h1");
+    assert((await page.locator("h1").innerText()) === "Bryz Trades", "rename title");
+    assert((await page.title()) === "Bryz Trades", "rename document title");
+    const stored = await page.evaluate(function () {
+      return {
+        v3: localStorage.getItem("ladder-journal-v3"),
+        v2: localStorage.getItem("ladder-journal-v2"),
+        pre: localStorage.getItem("ladder-journal-premigration"),
+        pre3: localStorage.getItem("ladder-journal-premigration-v3"),
+        theme: localStorage.getItem("stock-tracker-theme")
+      };
+    });
+    assert(stored.v3 === v3, "v3 bytes changed");
+    assert(stored.v2 === v2, "v2 bytes changed");
+    assert(stored.pre === pre, "premigration bytes changed");
+    assert(stored.pre3 === pre3, "premigration v3 bytes changed");
+    assert(stored.theme === "dark", "theme key changed");
+    await page.getByRole("tab", { name: "Positions" }).click();
+    await shows(page, "#positionsList", "IBM");
+    console.log("stored v3 untouched passed");
   } finally {
     await context.close();
   }
