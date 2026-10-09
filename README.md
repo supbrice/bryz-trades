@@ -10,7 +10,9 @@ A personal stock tracker for daily use. Static site, no build step, no account, 
 - Data stays in this browser (`localStorage`), with **Export** and **Import** JSON backups
 - Dark mode is the default. Use the theme button to switch to light mode; the choice is remembered on this device. If you have not chosen yet, the page follows your system light or dark setting.
 
-On a phone, use the Calendar and Positions tabs. On a wider screen both show at once. The first visit starts with SOFI at the old default levels ($18.00 / $18.00 / $16.92). If this browser already had the old SOFI card saved, those saved levels are kept. Edit or remove SOFI whenever you want.
+Use Overview, Journal, Calendar, Analytics, and Settings & Backups. The first visit starts with SOFI at the old default levels ($18.00 / $18.00 / $16.92). If this browser already had the old SOFI card saved, those saved levels are kept. Edit or remove SOFI whenever you want.
+
+Overview shows this month's totals, recent days, and a short position list. Journal is where you add a ticker, shares, and average cost. The close checklist stays folded until you need it. Calendar is where you enter one daily gain or loss. Analytics repeats those totals and draws a bar for each logged day. Settings & Backups holds the theme switch and JSON export / import.
 
 ## Close checklist
 
@@ -26,7 +28,7 @@ Hard stop wins if both it and get-out are hit. Only the close you paste is used.
 
 ## Backup
 
-**Export** downloads a JSON file. **Import** replaces the stocks and days on this device with that file. Clearing site data deletes the tracker, so keep a backup if the numbers matter.
+**Settings & Backups** has Export and Import. Export downloads a JSON file. Import replaces the stocks and days on this device with that file. The theme choice is stored separately and is not part of the backup. Clearing site data deletes the journal, so keep a backup if the numbers matter.
 
 Open `index.html`, or use the GitHub Pages site. No install.
 

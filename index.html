@@ -43,29 +43,46 @@
         </div>
         <p class="sub">Positions and daily results. <strong>Not financial advice.</strong> Does not place trades.</p>
       </div>
-      <div class="header-actions">
-        <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode">Dark</button>
-        <button type="button" id="exportBtn">Export</button>
-        <button type="button" id="importBtn">Import</button>
-        <input type="file" id="importFile" accept="application/json,.json" hidden />
-      </div>
     </header>
+
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" data-tab="overview" class="active" aria-selected="true">Overview</button>
+      <button type="button" role="tab" data-tab="journal" aria-selected="false">Journal</button>
+      <button type="button" role="tab" id="tabCalendar" data-tab="calendar" aria-selected="false">Calendar</button>
+      <button type="button" role="tab" data-tab="analytics" aria-selected="false">Analytics</button>
+      <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings & Backups</button>
+    </nav>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
     <div class="views">
-      <section id="positionsView" class="view" role="tabpanel" aria-label="Positions">
+      <section id="overviewView" class="view active" role="tabpanel" aria-label="Overview">
         <div class="panel">
           <div class="panel-head">
-            <h2>Positions</h2>
+            <h2>Overview</h2>
+            <button type="button" id="overviewLogBtn" class="primary" data-log-today>Log today</button>
+          </div>
+          <div id="overviewSummary" aria-live="polite"></div>
+          <h3 class="section-title">Recent days</h3>
+          <div id="recentDays"></div>
+          <h3 class="section-title">Positions</h3>
+          <div id="overviewPositions"></div>
+        </div>
+      </section>
+
+      <section id="positionsView" class="view" role="tabpanel" aria-label="Journal">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Journal</h2>
             <button type="button" id="addTickerBtn" class="primary">Add stock</button>
           </div>
-          <p class="hint">Shares, average cost, and an optional close checklist for each ticker.</p>
+          <p class="hint">Ticker, shares, and average cost. Notes and the close checklist stay optional.</p>
+          <div class="pos-head" aria-hidden="true"><span>Ticker</span><span>Position</span><span>Levels</span><span></span></div>
           <div id="positionsList"></div>
         </div>
       </section>
 
-      <section id="calendarView" class="view active" role="tabpanel" aria-label="Calendar">
+      <section id="calendarView" class="view" role="tabpanel" aria-label="Calendar">
         <div class="panel">
           <div class="month-nav">
             <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
@@ -82,15 +99,39 @@
           <div id="weekList"></div>
         </div>
       </section>
+
+      <section id="analyticsView" class="view" role="tabpanel" aria-label="Analytics">
+        <div class="panel">
+          <h2>Analytics</h2>
+          <p class="hint">The same month, week, and year totals as the calendar. Bars are the daily results you typed, not prices.</p>
+          <div id="analyticsSummary"></div>
+          <h3 class="section-title">Daily results</h3>
+          <div id="pnlBars"></div>
+          <div id="analyticsWeeks"></div>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view" role="tabpanel" aria-label="Settings and backups">
+        <div class="panel">
+          <h2>Settings & Backups</h2>
+          <h3 class="section-title">Appearance</h3>
+          <div class="settings-actions">
+            <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode">Dark</button>
+          </div>
+          <h3 class="section-title">Backup</h3>
+          <p class="hint">Export downloads a JSON file. Import replaces the stocks and days on this device. The theme choice stays.</p>
+          <div class="settings-actions">
+            <button type="button" id="exportBtn">Export</button>
+            <button type="button" id="importBtn">Import</button>
+            <input type="file" id="importFile" accept="application/json,.json" hidden />
+          </div>
+          <p class="hint">Not financial advice. Does not place trades. No live prices.</p>
+        </div>
+      </section>
     </div>
 
     <p class="footer-note">Saved in this browser only. Export a JSON backup before you clear site data. No live prices, and nothing here buys or sells.</p>
   </div>
-
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button type="button" role="tab" id="tabCalendar" data-tab="calendar" class="active" aria-selected="true">Calendar</button>
-    <button type="button" role="tab" id="tabPositions" data-tab="positions" aria-selected="false">Positions</button>
-  </nav>
 
   <dialog id="tickerDialog" aria-labelledby="tickerDialogTitle">
     <form id="tickerForm">
@@ -170,15 +211,18 @@
       <label>Amount ($)
         <input id="dayAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" />
       </label>
-      <label>Note
-        <textarea id="dayNote" rows="2" maxlength="500" placeholder="Optional"></textarea>
-      </label>
-      <div class="split-head">
-        <p class="section-title">Split by stock</p>
-        <button type="button" id="addSplitBtn">Add split</button>
-      </div>
-      <div id="splitRows"></div>
-      <p id="splitHint" class="hint"></p>
+      <details id="dayMore">
+        <summary>Note and split</summary>
+        <label>Note
+          <textarea id="dayNote" rows="2" maxlength="500" placeholder="Optional"></textarea>
+        </label>
+        <div class="split-head">
+          <p class="section-title">Split by stock</p>
+          <button type="button" id="addSplitBtn">Add split</button>
+        </div>
+        <div id="splitRows"></div>
+        <p id="splitHint" class="hint"></p>
+      </details>
       <p id="dayError" class="form-error" hidden></p>
       <div class="dialog-actions">
         <button type="submit" class="primary">Save day</button>

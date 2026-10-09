@@ -7,7 +7,7 @@
     today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     year: now.getFullYear(),
     month: now.getMonth(),
-    tab: "calendar"
+    tab: "overview"
   };
 
   function persist() {
@@ -65,7 +65,7 @@
       } else {
         state.data.tickers.push(built.ticker);
       }
-      state.tab = "positions";
+      state.tab = "journal";
       persist();
       refresh();
       return { ok: true };

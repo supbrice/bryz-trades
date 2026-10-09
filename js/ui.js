@@ -28,6 +28,9 @@
     document.getElementById("logTodayBtn").addEventListener("click", function () {
       handlers.openDay(ST.dateKey(state.today));
     });
+    document.getElementById("overviewLogBtn").addEventListener("click", function () {
+      handlers.openDay(ST.dateKey(state.today));
+    });
     document.getElementById("exportBtn").addEventListener("click", function () {
       handlers.exportData();
     });
@@ -102,9 +105,9 @@
         handlers.setTab(tab.dataset.tab);
         return;
       }
-      const day = event.target.closest("[data-day]");
+      const day = event.target.closest("[data-day], [data-open-day]");
       if (day) {
-        handlers.openDay(day.dataset.day);
+        handlers.openDay(day.dataset.day || day.dataset.openDay);
         return;
       }
       const edit = event.target.closest("[data-edit]");
@@ -126,8 +129,10 @@
   ST.draw = function (nextState) {
     state = nextState;
     drawTabs();
+    drawOverview();
     drawPositions();
     drawCalendar();
+    drawAnalytics();
   };
 
   ST.showBanner = function (message, isError) {
@@ -184,6 +189,7 @@
     }
     document.getElementById("clearDayBtn").hidden = !entry;
     document.getElementById("addSplitBtn").disabled = currentTickers.length === 0;
+    document.getElementById("dayMore").open = !!(entry && (entry.note || (entry.breakdown && entry.breakdown.length)));
     hideFormError("dayError");
     updateSplitHint();
     document.getElementById("dayDialog").showModal();
@@ -191,13 +197,57 @@
   };
 
   function drawTabs() {
-    document.getElementById("positionsView").classList.toggle("active", state.tab === "positions");
-    document.getElementById("calendarView").classList.toggle("active", state.tab === "calendar");
+    const views = {
+      overview: "overviewView",
+      journal: "positionsView",
+      calendar: "calendarView",
+      analytics: "analyticsView",
+      settings: "settingsView"
+    };
+    Object.keys(views).forEach(function (name) {
+      document.getElementById(views[name]).classList.toggle("active", state.tab === name);
+    });
     document.querySelectorAll("[data-tab]").forEach(function (btn) {
       const on = btn.dataset.tab === state.tab;
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-selected", on ? "true" : "false");
     });
+  }
+
+  function drawOverview() {
+    const summary = ST.summarizeMonth(state.data.days, state.year, state.month, state.today);
+    document.getElementById("overviewSummary").innerHTML = summaryHtml(summary);
+    const todayKey = ST.dateKey(state.today);
+    document.getElementById("overviewLogBtn").textContent = state.data.days[todayKey] ? "Edit today" : "Log today";
+    document.getElementById("recentDays").innerHTML = recentHtml();
+    document.getElementById("overviewPositions").innerHTML = overviewPositionsHtml();
+  }
+
+  function recentHtml() {
+    const keys = Object.keys(state.data.days).filter(function (key) {
+      return ST.parseDateKey(key) && state.data.days[key] && typeof state.data.days[key].pnl === "number";
+    }).sort().reverse().slice(0, 6);
+    if (!keys.length) return '<p class="empty">No days logged yet. Log today, or open the calendar and tap a day.</p>';
+    return keys.map(function (key) {
+      const entry = state.data.days[key];
+      const date = ST.parseDateKey(key);
+      const note = entry.note ? '<span class="meta"> · ' + ST.escapeHtml(entry.note) + "</span>" : "";
+      return '<button type="button" class="recent-day" data-open-day="' + key + '"><span>' +
+        ST.escapeHtml(date ? ST.formatShortDate(date) : key) + note + '</span><strong class="' + pnlClass(entry.pnl) + '">' +
+        ST.escapeHtml(ST.formatMoney(entry.pnl)) + "</strong></button>";
+    }).join("");
+  }
+
+  function overviewPositionsHtml() {
+    const tickers = state.data.tickers;
+    if (!tickers.length) return '<p class="empty">No stocks yet. Add one in Journal.</p>';
+    return tickers.map(function (ticker) {
+      const status = ST.computeStatus(ticker);
+      const shares = ticker.shares == null ? "No share count" : ST.formatShares(ticker.shares);
+      const pill = status ? '<span class="pill ' + status.kind + '">' + ST.escapeHtml(status.text) + "</span>" : "";
+      return '<p class="overview-pos"><strong>' + ST.escapeHtml(ticker.symbol) + '</strong><span class="meta"> · ' +
+        ST.escapeHtml(shares) + "</span> " + pill + "</p>";
+    }).join("");
   }
 
   function drawPositions() {
@@ -245,6 +295,34 @@
     document.getElementById("weekList").innerHTML = weekHtml(summary.weeks);
     document.getElementById("calendarGrid").setAttribute("aria-label", ST.formatMonthYear(state.year, state.month));
     document.getElementById("calendarGrid").innerHTML = calendarHtml();
+  }
+
+  function drawAnalytics() {
+    const summary = ST.summarizeMonth(state.data.days, state.year, state.month, state.today);
+    document.getElementById("analyticsSummary").innerHTML = summaryHtml(summary);
+    document.getElementById("analyticsWeeks").innerHTML = weekHtml(summary.weeks);
+    document.getElementById("pnlBars").innerHTML = barsHtml();
+  }
+
+  function barsHtml() {
+    const points = [];
+    ST.monthWeeks(state.year, state.month).forEach(function (week) {
+      week.forEach(function (day) {
+        if (!day.inMonth) return;
+        const entry = state.data.days[day.key];
+        if (!entry || typeof entry.pnl !== "number") return;
+        points.push({ key: day.key, pnl: entry.pnl, label: String(day.date.getDate()) });
+      });
+    });
+    if (!points.length) return '<p class="empty">No days logged this month.</p>';
+    let max = 0;
+    points.forEach(function (point) { max = Math.max(max, Math.abs(point.pnl)); });
+    if (max === 0) max = 1;
+    return '<div class="bars" role="img" aria-label="Daily results for this month">' + points.map(function (point) {
+      const height = Math.max(6, Math.round((Math.abs(point.pnl) / max) * 100));
+      return '<div class="bar-col"><div class="bar-track"><div class="bar-fill ' + pnlClass(point.pnl) +
+        '" style="height:' + height + '%"></div></div><span>' + ST.escapeHtml(point.label) + "</span></div>";
+    }).join("") + "</div>";
   }
 
   function summaryHtml(summary) {
