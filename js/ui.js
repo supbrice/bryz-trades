@@ -2,7 +2,7 @@
 (function (root) {
   const ST = root.StockTracker = root.StockTracker || {};
   const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const TABS = ["dashboard", "positions", "calendar", "analytics", "settings"];
+  const TABS = ["dashboard", "markets", "positions", "risk", "analytics", "calendar", "settings"];
 
   let handlers = {};
   let state = null;
@@ -21,8 +21,17 @@
     document.getElementById("logTodayBtn").addEventListener("click", function () { handlers.openDay(ST.dateKey(state.today)); });
     document.getElementById("positionFilter").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionSymbol").addEventListener("input", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionDirection").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionStrategy").addEventListener("input", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionFrom").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionTo").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("overviewPreset").addEventListener("change", function () { handlers.setOverview({ preset: this.value }); });
+    document.getElementById("overviewFrom").addEventListener("change", function () {
+      handlers.setOverview({ preset: "custom", from: this.value, to: document.getElementById("overviewTo").value });
+    });
+    document.getElementById("overviewTo").addEventListener("change", function () {
+      handlers.setOverview({ preset: "custom", from: document.getElementById("overviewFrom").value, to: this.value });
+    });
     document.getElementById("analyticsSymbol").addEventListener("input", function () { handlers.setAnalytics(readAnalyticsQuery()); });
     document.getElementById("analyticsStatus").addEventListener("change", function () { handlers.setAnalytics(readAnalyticsQuery()); });
     document.getElementById("symbolForm").addEventListener("submit", function (event) {
@@ -37,7 +46,11 @@
       if (hint) document.getElementById("symbolExchange").value = hint;
     });
     document.getElementById("dashAddTrade").addEventListener("click", function () { handlers.addTrade(); });
-    document.getElementById("dashPositions").addEventListener("click", function () { handlers.setTab("positions"); });
+    document.getElementById("dashPositions").addEventListener("click", function () {
+      handlers.setFilter({ filter: "open", symbol: "", direction: "all", strategy: "", from: "", to: "" });
+    });
+    document.getElementById("gotoAnalytics").addEventListener("click", function () { handlers.setTab("analytics"); });
+    document.getElementById("gotoCalendar").addEventListener("click", function () { handlers.setTab("calendar"); });
     document.getElementById("addExitBtn").addEventListener("click", function () {
       document.getElementById("exitRows").insertAdjacentHTML("beforeend", exitRowHtml(null));
       updateTradeChrome();
@@ -49,6 +62,11 @@
       if (row) row.remove();
       updateTradeChrome();
     });
+    document.querySelectorAll("[data-pane]").forEach(function (btn) {
+      btn.addEventListener("click", function () { handlers.setAnalyticsPane(btn.getAttribute("data-pane")); });
+    });
+    const sectionNav = document.querySelector(".tabs");
+    if (sectionNav) sectionNav.addEventListener("scroll", syncTabFade);
     document.getElementById("rangePreset").addEventListener("change", function () { handlers.setRange({ preset: this.value }); });
     document.getElementById("rangeFrom").addEventListener("change", function () { handlers.setRange({ preset: "custom", from: this.value, to: document.getElementById("rangeTo").value }); });
     document.getElementById("rangeTo").addEventListener("change", function () { handlers.setRange({ preset: "custom", from: document.getElementById("rangeFrom").value, to: this.value }); });
@@ -114,6 +132,8 @@
         if (dialog) dialog.close();
         return;
       }
+      const info = event.target.closest("[data-info]");
+      if (info) { showChartTip(info, info.getAttribute("data-info")); return; }
       const tab = event.target.closest("[data-tab]");
       if (tab) { handlers.setTab(tab.dataset.tab); return; }
       const day = event.target.closest("[data-day]");
@@ -140,6 +160,25 @@
       }
       const dropWatch = event.target.closest("[data-remove-watch]");
       if (dropWatch) handlers.removeWatch(dropWatch.dataset.removeWatch);
+    });
+    document.addEventListener("pointerover", function (event) {
+      const hit = event.target.closest && event.target.closest("[data-tip]");
+      if (hit) showChartTip(hit, hit.getAttribute("data-tip"));
+    });
+    document.addEventListener("pointerout", function (event) {
+      const hit = event.target.closest && event.target.closest("[data-tip]");
+      if (!hit) return;
+      const next = event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest("[data-tip]");
+      if (!next) hideChartTip();
+    });
+    document.addEventListener("focusin", function (event) {
+      const hit = event.target.closest && event.target.closest("[data-tip], [data-info]");
+      if (!hit) return;
+      showChartTip(hit, hit.getAttribute("data-tip") || hit.getAttribute("data-info"));
+    });
+    document.addEventListener("focusout", hideChartTip);
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") hideChartTip();
     });
     document.addEventListener("ladder-theme", function () {
       if (state) syncWidgets(state);
@@ -269,6 +308,7 @@
   };
 
   function drawTabs() {
+    const nav = document.querySelector(".tabs");
     TABS.forEach(function (tab) {
       const on = state.tab === tab;
       const view = document.getElementById("view-" + tab);
@@ -277,49 +317,178 @@
       view.hidden = !on;
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-selected", on ? "true" : "false");
+      if (on && nav) revealTab(nav, btn);
     });
+    syncTabFade();
+  }
+
+  function revealTab(nav, btn) {
+    const left = btn.offsetLeft;
+    const right = left + btn.offsetWidth;
+    if (left < nav.scrollLeft) nav.scrollLeft = Math.max(0, left - 8);
+    else if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 12;
+  }
+
+  function syncTabFade() {
+    const nav = document.querySelector(".tabs");
+    const shell = document.querySelector(".tab-shell");
+    if (!nav || !shell) return;
+    const max = nav.scrollWidth - nav.clientWidth;
+    shell.classList.toggle("scrolled", nav.scrollLeft > 4);
+    shell.classList.toggle("at-end", max <= 4 || nav.scrollLeft >= max - 4);
+  }
+
+  function overviewBounds() {
+    const preset = state.overviewPreset || "ytd";
+    if (preset === "all") return { start: "", end: "", label: "All dated closes", ready: true };
+    if (preset === "custom") {
+      const start = state.overviewFrom || "";
+      const end = state.overviewTo || "";
+      if (!start || !end) return { start: start, end: end, label: "Custom range", ready: false, message: "Choose a start and an end date. Both are included. No result is filled in until then." };
+      if (start > end) return { start: start, end: end, label: "Custom range", ready: false, message: "The start date is after the end date." };
+      return { start: start, end: end, label: "Custom range", ready: true };
+    }
+    const range = ST.rangeForPreset(preset === "month" ? "month" : "ytd", state.today);
+    return { start: range.start, end: range.end, label: range.label, ready: true };
   }
 
   function drawDashboard() {
+    const presetEl = document.getElementById("overviewPreset");
+    if (presetEl && document.activeElement !== presetEl) presetEl.value = state.overviewPreset || "ytd";
+    setIfIdle("overviewFrom", state.overviewFrom || "");
+    setIfIdle("overviewTo", state.overviewTo || "");
+    const bounds = overviewBounds();
     const todayKey = ST.dateKey(state.today);
-    const ytd = ST.rangeForPreset("ytd", state.today);
-    const ytdMetrics = ST.analyze(state.data, { start: ytd.start, end: ytd.end });
-    const all = ST.analyze(state.data);
     const today = ST.dayDetail(state.data, todayKey);
-    const openCount = state.data.trades.filter(function (trade) { return trade.status === "open"; }).length;
-    const recent = all.curve.slice().reverse().slice(0, 1);
-    const closed = state.data.trades.map(ST.tradeResult).filter(function (result) { return result.included; }).sort(function (a, b) {
-      return (b.exitDate || "").localeCompare(a.exitDate || "");
-    }).slice(0, 5);
-    const recentHtml = closed.length
-      ? '<h3 class="section-title">Recent closed trades</h3><ul class="perf-list">' + closed.map(function (result) {
-        return "<li><span><strong>" + ST.escapeHtml(result.symbol) + "</strong> " + ST.escapeHtml(result.exitDate || "no exit date") + "</span>" + moneyHtml(result.netCents) + "</li>";
-      }).join("") + "</ul>"
-      : '<p class="empty">No closed trades yet. Open positions stay off realized profit and loss until you record an exit.</p>';
+    const openTrades = state.data.trades.filter(function (trade) { return trade.status === "open"; });
+    const planned = ST.plannedOpenRisk(state.data);
     const books = ST.portfolioSnapshot(state.data);
-    const unrealized = books.unrealizedCents == null
-      ? '<div class="stat" id="dashUnrealized"><div class="label">Unrealized P/L</div><div class="value na">N/A <span class="tag">no manual mark</span></div></div>'
-      : stat("Unrealized P/L, manual marks", books.unrealizedCents, "id=\"dashUnrealized\"");
+    const metrics = bounds.ready
+      ? ST.analyze(state.data, { start: bounds.start || null, end: bounds.end || null })
+      : null;
+    const emptyJournal = !state.data.trades.length;
+    const noCloses = !metrics || metrics.tradeCount === 0;
+    const periodNote = !bounds.ready
+      ? bounds.message
+      : (bounds.label + (bounds.start ? " · " + bounds.start + " – " + bounds.end : "") + " · not account equity");
+    const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + " wins · " + metrics.losses + " losses · " + metrics.breakevens + " flat");
+    const openSub = openTrades.length ? "Not realized" : "None open";
+    const planSub = planned.cents == null
+      ? (planned.skipped ? "Stop not recorded" : "No open plan")
+      : ((planned.equityPercent ? planned.equityPercent + " of saved account" : "From recorded stops") + (planned.skipped ? " · " + planned.skipped + " missing a stop" : ""));
     document.getElementById("dashboardBody").innerHTML =
-      '<div class="stats">' +
-        '<div class="stat" id="dashPortfolio"><div class="label">Portfolio market value</div><div class="value na">N/A <span class="tag">not inferred</span></div></div>' +
-        '<div class="stat" id="dashCash"><div class="label">Cash balance</div><div class="value na">N/A <span class="tag">not tracked</span></div></div>' +
-        unrealized +
-        '<div class="stat" id="dashCost"><div class="label">Recorded cost of open longs</div><div class="value flat">' +
-          (books.recordedLongCostCents == null ? 'N/A <span class="tag">no open long shares</span>' : ST.escapeHtml(ST.formatCents(books.recordedLongCostCents)) + ' <span class="tag">not market value</span>') +
-        "</div></div>" +
-        stat("Year to date, closed trades", ytdMetrics.realizedNetCents, "id=\"dashYtd\"") +
-        stat("All dated closes", all.realizedNetCents, "id=\"dashRealized\"") +
-        '<div class="stat" id="dashOpen"><div class="label">Open trades</div><div class="value flat">' + openCount + ' <span class="tag">not realized</span></div></div>' +
-        stat("Today, closed trades", today.tradeCents, "id=\"dashTodayTrades\"") +
-        stat("Today, manual entry", today.manualCents, "id=\"dashTodayManual\"") +
-        '<div class="stat record"><div class="label">Best and worst dated day, year to date</div><div class="extremes">' +
-          extreme("Best", ytdMetrics.bestDay) + extreme("Worst", ytdMetrics.worstDay) +
-        "</div></div></div>" +
-      '<h3 class="section-title">Recorded performance</h3><p class="hint">' + ST.escapeHtml(ST.METRIC_HELP.cumulative) + "</p>" +
-      curveSvg(all.curve) + recentHtml;
+      (emptyJournal ? '<p class="empty">No trades recorded yet. Log a trade to see results. Sample numbers are not filled in.</p>' : "") +
+      (!emptyJournal && !bounds.ready ? '<p class="empty">' + ST.escapeHtml(bounds.message) + "</p>" : "") +
+      (!emptyJournal && bounds.ready && noCloses ? '<p class="empty">No closed trades in this period. Open positions are not shown as profit.</p>' : "") +
+      '<div class="primary-metrics">' +
+        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodNote, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.") +
+        kpiText("Win rate", metrics && metrics.winRate, winSub, "dashWinRate", "Wins divided by wins, losses, and breakevens. A breakeven is a net of zero and is not a win.") +
+        kpiText("Open positions", String(openTrades.length), openSub, "dashOpen", "Positions still open. They are excluded from realized profit.") +
+        kpiPlain("Planned risk", planned.cents, planSub, "dashPlanned", "Remaining shares times the distance from the recorded entry to the recorded stop. Missing stops are left out. This is not a live stop.") +
+      "</div>" +
+      '<div class="quiet-row">' +
+        quietStat("Unrealized, estimate", books.unrealizedCents, "dashUnrealized", books.unrealizedCents == null ? "price not entered" : "manual mark") +
+        quietStat("Today, closed", today.tradeCents, "dashTodayTrades", today.tradeCents == null ? "nothing closed today" : "") +
+        quietStat("Today, manual", today.manualCents, "dashTodayManual", today.manualCents == null ? "no manual entry" : "") +
+      "</div>" +
+      '<div class="overview-split">' +
+        '<section class="chart-card"><div class="card-title"><h3>Realized P/L</h3>' + infoBtn("Cumulative closed-trade profit. Not account equity.") + "</div>" +
+          '<p class="hint">' + ST.escapeHtml(periodNote) + "</p>" +
+          curveSvg(metrics ? metrics.curve : [], metrics) +
+        "</section>" +
+        '<div class="side-stack">' +
+          '<section class="side-card"><h3>Recent trades</h3>' + recentTable(bounds) + "</section>" +
+          '<section class="side-card"><h3>Open positions</h3>' + openCard(openTrades) + "</section>" +
+        "</div>" +
+      "</div>";
     drawSymbolDetail();
     drawWatchlist();
+  }
+
+  function kpi(label, cents, sub, id, hero, about) {
+    return '<div class="stat' + (hero ? " hero" : "") + '" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + moneyHtml(cents) + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  }
+
+  function kpiText(label, text, sub, id, about) {
+    const value = text == null || text === ""
+      ? '<div class="value na">N/A</div>'
+      : '<div class="value flat">' + ST.escapeHtml(text) + "</div>";
+    return '<div class="stat" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + value + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  }
+
+  function kpiPlain(label, cents, sub, id, about) {
+    const value = typeof cents !== "bigint"
+      ? '<div class="value na">N/A</div>'
+      : '<div class="value flat">' + ST.escapeHtml(ST.formatCents(cents, "plain")) + "</div>";
+    return '<div class="stat" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + value + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  }
+
+  function quietStat(label, cents, id, emptyTag) {
+    const value = typeof cents !== "bigint"
+      ? '<div class="value na">N/A' + (emptyTag ? ' <span class="tag">' + ST.escapeHtml(emptyTag) + "</span>" : "") + "</div>"
+      : moneyHtml(cents);
+    return '<div class="stat quiet" id="' + id + '"><div class="label">' + ST.escapeHtml(label) + "</div>" + value + "</div>";
+  }
+
+  function infoBtn(text) {
+    return '<button type="button" class="info" aria-label="About this figure" data-info="' + ST.escapeHtml(text) + '">i</button>';
+  }
+
+  function openCard(openTrades) {
+    if (!openTrades.length) return '<p class="empty">No open positions.</p>';
+    return '<ul class="perf-list">' + openTrades.slice(0, 6).map(function (trade) {
+      const row = ST.positionAccounting(trade);
+      const stop = trade.hardStop == null ? "stop not recorded" : "stop " + ST.formatPlainMoney(trade.hardStop);
+      return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(trade.direction === "short" ? "Short" : "Long") +
+        "</span><span>" + ST.escapeHtml(row.remainingQty == null ? "quantity N/A" : ST.formatShares(row.remainingQty) + " left") + " · " + ST.escapeHtml(stop) + "</span></li>";
+    }).join("") + "</ul>";
+  }
+
+  function recentTable(bounds) {
+    const rows = [];
+    state.data.trades.forEach(function (trade) {
+      const entry = ST.effectiveEntry ? ST.effectiveEntry(trade) : (trade.entryPrice != null ? trade.entryPrice : trade.avgCost);
+      if (trade.exits && trade.exits.length && trade.status !== "cancelled") {
+        const events = ST.realizedEvents(trade);
+        trade.exits.forEach(function (exit, index) {
+          const event = events[index];
+          if (!event || event.reason !== "realized") return;
+          if (bounds.ready && bounds.start && event.exitDate < bounds.start) return;
+          if (bounds.ready && bounds.end && event.exitDate > bounds.end) return;
+          rows.push(tableRow(trade.symbol, trade.direction, exit.date, exit.quantity, entry, exit.price, event.netCents, "Closed"));
+        });
+        return;
+      }
+      const result = ST.tradeResult(trade);
+      if (result.reason === "realized") {
+        if (bounds.ready && bounds.start && result.exitDate < bounds.start) return;
+        if (bounds.ready && bounds.end && result.exitDate > bounds.end) return;
+        rows.push(tableRow(trade.symbol, trade.direction, result.exitDate, trade.quantity, entry, trade.exitPrice, result.netCents, "Closed"));
+      } else if (trade.status === "open") {
+        rows.push(tableRow(trade.symbol, trade.direction, trade.entryDate || "", trade.quantity, entry, null, null, "Open"));
+      }
+    });
+    rows.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+    const shown = rows.slice(0, 8);
+    if (!state.data.trades.length) return '<p class="empty">No trades recorded yet.</p>';
+    if (!shown.length) return '<p class="empty">No trades in this period. A blank result is not shown as zero.</p>';
+    const body = shown.map(function (row) {
+      const net = row.net == null ? '<span class="na">N/A</span>' : '<span class="' + ST.pnlWord(row.net) + '">' + ST.escapeHtml(ST.formatCents(row.net)) + "</span>";
+      const exit = row.exit == null ? '<span class="na">N/A</span>' : ST.escapeHtml(ST.formatPlainMoney(row.exit));
+      return "<tr><td data-label=\"Ticker\">" + ST.escapeHtml(row.symbol) + "</td>" +
+        "<td data-label=\"Side\">" + ST.escapeHtml(row.side) + "</td>" +
+        "<td data-label=\"Date\">" + ST.escapeHtml(row.date || "N/A") + "</td>" +
+        '<td class="num" data-label="Qty">' + ST.escapeHtml(row.qty == null ? "N/A" : ST.formatShares(row.qty)) + "</td>" +
+        '<td class="num" data-label="Entry">' + ST.escapeHtml(row.entry == null ? "N/A" : ST.formatPlainMoney(row.entry)) + "</td>" +
+        '<td class="num" data-label="Exit">' + exit + "</td>" +
+        '<td class="num" data-label="Net">' + net + "</td>" +
+        "<td data-label=\"Status\">" + ST.escapeHtml(row.status) + "</td></tr>";
+    }).join("");
+    return '<div class="trade-scroll"><table class="trade-table"><thead><tr><th>Ticker</th><th>Side</th><th>Date</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Net</th><th>Status</th></tr></thead><tbody>' + body + "</tbody></table></div>";
+  }
+
+  function tableRow(symbol, direction, date, qty, entry, exit, net, status) {
+    return { symbol: symbol, side: direction === "short" ? "Short" : "Long", date: date || "", qty: qty, entry: entry, exit: exit, net: net, status: status };
   }
 
   function drawPositions() {
@@ -328,13 +497,20 @@
     setIfIdle("positionSymbol", state.positionSymbol || "");
     setIfIdle("positionFrom", state.positionFrom || "");
     setIfIdle("positionTo", state.positionTo || "");
+    setIfIdle("positionStrategy", state.positionStrategy || "");
+    const directionEl = document.getElementById("positionDirection");
+    if (document.activeElement !== directionEl) directionEl.value = state.positionDirection || "all";
     const filter = state.positionFilter || "all";
     const symbol = String(state.positionSymbol || "").trim().replace(/^\$/, "").toUpperCase();
+    const direction = state.positionDirection || "all";
+    const strategy = String(state.positionStrategy || "").trim().toLowerCase();
     const from = state.positionFrom || "";
     const to = state.positionTo || "";
     const trades = state.data.trades.filter(function (trade) {
       if (filter !== "all" && trade.status !== filter) return false;
       if (symbol && trade.symbol !== symbol) return false;
+      if (direction !== "all" && trade.direction !== direction) return false;
+      if (strategy && String(trade.strategy || "").toLowerCase().indexOf(strategy) === -1) return false;
       if ((from || to) && !tradeInDateRange(trade, from, to)) return false;
       return true;
     });
@@ -460,27 +636,32 @@
       document.getElementById("analyticsBody").innerHTML = '<p class="empty">The start date is after the end date.</p>';
       return;
     }
+    const pane = state.analyticsPane || "overview";
+    document.querySelectorAll("[data-pane]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-pane") === pane ? "true" : "false");
+    });
     const body = [];
-    body.push('<div class="metrics">');
-    body.push(metric("Realized net P/L", metrics.realizedNetCents, ST.METRIC_HELP.realizedNet, "metric-realized"));
-    body.push(metricCount("Winning trades", metrics.tradeCount ? metrics.wins : null, ST.METRIC_HELP.wins));
-    body.push(metricCount("Losing trades", metrics.tradeCount ? metrics.losses : null, ST.METRIC_HELP.losses));
-    body.push(metricCount("Breakeven trades", metrics.tradeCount ? metrics.breakevens : null, ST.METRIC_HELP.breakeven));
-    body.push(metricText("Win rate", metrics.winRate, ST.METRIC_HELP.winRate));
-    body.push(metric("Average winning trade", metrics.avgWinCents, ST.METRIC_HELP.avgWin));
-    body.push(metric("Average losing trade", metrics.avgLossCents, ST.METRIC_HELP.avgLoss));
-    body.push(metric("Gross profit", metrics.grossProfitCents, ST.METRIC_HELP.grossProfit));
-    body.push(metricMagnitude("Gross loss", metrics.grossLossCents, ST.METRIC_HELP.grossLoss, "sum of losses"));
-    body.push(metricText("Profit factor", metrics.profitFactor, ST.METRIC_HELP.profitFactor));
-    body.push('<div class="metric"><h3>Best day</h3>' + extremeValue(metrics.bestDay) + '<p class="def">' + ST.escapeHtml(ST.METRIC_HELP.bestDay) + "</p></div>");
-    body.push('<div class="metric"><h3>Worst day</h3>' + extremeValue(metrics.worstDay) + '<p class="def">' + ST.escapeHtml(ST.METRIC_HELP.worstDay) + "</p></div>");
-    body.push(metric("Cumulative realized P/L", metrics.cumulativeCents, ST.METRIC_HELP.cumulative, "metric-cumulative"));
-    body.push(metricMagnitude("Drawdown from peak", metrics.currentDrawdownCents, ST.METRIC_HELP.drawdown, "below peak"));
-    body.push(metricMagnitude("Max drawdown", metrics.maxDrawdownCents, ST.METRIC_HELP.maxDrawdown, "below peak"));
-    body.push(groupHtml("By ticker", metrics.byTicker, ST.METRIC_HELP.byTicker));
-    body.push(groupHtml("By strategy", metrics.byStrategy, ST.METRIC_HELP.byStrategy));
-    body.push('<div class="metric wide"><h3>Cumulative closed-trade P/L</h3><p class="def">' + ST.escapeHtml(ST.METRIC_HELP.cumulative) + "</p>" + curveSvg(metrics.curve) + "</div>");
-    body.push("</div>");
+    if (!metrics.tradeCount) {
+      body.push('<p class="empty">No closed trades in this range. Nothing is filled in as zero.</p>');
+      body.push('<div class="metrics">' + metric("Realized net P/L", null, ST.METRIC_HELP.realizedNet, "metric-realized") + "</div>");
+      body.push('<p class="hint">Cumulative closed-trade P/L is not account equity.</p>');
+    } else if (pane === "symbol") {
+      body.push(paneChart("By symbol", barSvg(metrics.byTicker.map(function (row) { return { label: row.label, cents: row.netCents }; }), "Realized profit and loss by ticker"), groupHtml("By ticker", metrics.byTicker, ST.METRIC_HELP.byTicker)));
+    } else if (pane === "strategy") {
+      body.push(paneChart("By strategy", barSvg(metrics.byStrategy.map(function (row) { return { label: row.label, cents: row.netCents }; }), "Realized profit and loss by strategy"), groupHtml("By strategy", metrics.byStrategy, ST.METRIC_HELP.byStrategy)));
+    } else if (pane === "time") {
+      body.push('<section class="chart-card"><h3>Daily realized P/L</h3><p class="hint">Each bar is that exit date. Manual days are not included.</p>' + barSvg(metrics.curve.map(function (point) { return { label: point.date, cents: point.dayCents }; }), "Daily realized profit and loss") + "</section>");
+      body.push('<section class="chart-card"><h3>By month</h3><p class="hint">Closed-trade net by exit month. This is not cash flow.</p>' + barSvg(monthPoints(metrics.curve), "Monthly realized profit and loss") + "</section>");
+    } else {
+      body.push('<div class="primary-metrics">' + metric("Realized net P/L", metrics.realizedNetCents, ST.METRIC_HELP.realizedNet, "metric-realized") + metricText("Win rate", metrics.winRate, ST.METRIC_HELP.winRate) + metricText("Profit factor", metrics.profitFactor, ST.METRIC_HELP.profitFactor) + metric("Avg P/L", metrics.avgTradeCents, ST.METRIC_HELP.avgTrade) + "</div>");
+      body.push('<section class="chart-card"><div class="card-title"><h3>Realized P/L</h3>' + infoBtn(ST.METRIC_HELP.cumulative) + "</div>" + curveSvg(metrics.curve, metrics) + "</section>");
+      body.push('<p class="hint">Closed-trade curve only. This is not account equity.</p>');
+      body.push('<div class="stat-grid">');
+      body.push(compactCard("Monthly", monthCard(metrics)));
+      body.push(compactCard("Trade stats", tradeStatsCard(metrics)));
+      body.push(compactCard("Daily stats", dailyStatsCard(metrics)));
+      body.push("</div>");
+    }
     const notes = [];
     if (metrics.excludedOpen) notes.push(metrics.excludedOpen + " open " + (metrics.excludedOpen === 1 ? "trade is" : "trades are") + " excluded.");
     if (metrics.excludedCancelled) notes.push(metrics.excludedCancelled + " cancelled " + (metrics.excludedCancelled === 1 ? "trade is" : "trades are") + " excluded.");
@@ -491,8 +672,56 @@
     document.getElementById("analyticsBody").innerHTML = body.join("");
   }
 
+  function paneChart(title, chart, list) {
+    return '<section class="chart-card"><h3>' + ST.escapeHtml(title) + "</h3>" + chart + "</section>" + list;
+  }
+
+  function compactCard(title, inner) {
+    return '<section class="stat-card"><h3>' + ST.escapeHtml(title) + "</h3>" + inner + "</section>";
+  }
+
+  function lineItem(label, valueHtml) {
+    return "<li><span>" + ST.escapeHtml(label) + "</span>" + valueHtml + "</li>";
+  }
+
+  function monthCard(metrics) {
+    const months = monthPoints(metrics.curve);
+    if (!months.length) return '<p class="empty">Not enough closed trades for a month.</p>';
+    let best = months[0];
+    let worst = months[0];
+    months.forEach(function (row) {
+      if (row.cents > best.cents) best = row;
+      if (row.cents < worst.cents) worst = row;
+    });
+    return '<ul class="perf-list">' +
+      lineItem("Best month", moneyHtml(best.cents).replace("</div>", " <span class=\"tag\">" + ST.escapeHtml(chartLabel(best.label)) + "</span></div>")) +
+      lineItem("Lowest month", moneyHtml(worst.cents).replace("</div>", " <span class=\"tag\">" + ST.escapeHtml(chartLabel(worst.label)) + "</span></div>")) +
+      lineItem("Months", '<div class="value flat">' + months.length + "</div>") +
+      "</ul>";
+  }
+
+  function tradeStatsCard(metrics) {
+    return '<ul class="perf-list">' +
+      lineItem("Wins", '<div class="value flat">' + metrics.wins + "</div>") +
+      lineItem("Losses", '<div class="value flat">' + metrics.losses + "</div>") +
+      lineItem("Breakeven", '<div class="value flat">' + metrics.breakevens + "</div>") +
+      lineItem("Avg win", moneyHtml(metrics.avgWinCents)) +
+      lineItem("Avg loss", moneyHtml(metrics.avgLossCents)) +
+      lineItem("Max drawdown", typeof metrics.maxDrawdownCents === "bigint" ? '<div class="value loss">' + ST.escapeHtml(ST.formatCents(metrics.maxDrawdownCents, "plain")) + "</div>" : '<div class="value na">N/A</div>') +
+      "</ul>";
+  }
+
+  function dailyStatsCard(metrics) {
+    if (!metrics.curve.length) return '<p class="empty">Not enough dated closes.</p>';
+    return '<ul class="perf-list">' +
+      lineItem("Trading days", '<div class="value flat">' + metrics.curve.length + "</div>") +
+      lineItem("Best day", extremeValue(metrics.bestDay)) +
+      lineItem("Worst day", extremeValue(metrics.worstDay)) +
+      "</ul>";
+  }
+
   function fillRiskDefaults() {
-    const view = document.getElementById("view-settings");
+    const view = document.getElementById("view-risk");
     if (document.activeElement && view.contains(document.activeElement)) return;
     const settings = state.data.settings || {};
     if (settings.accountSize != null && !document.getElementById("riskAccount").value) {
@@ -563,13 +792,141 @@
     return '<div class="metric wide"><h3>' + ST.escapeHtml(title) + '</h3><p class="def">' + ST.escapeHtml(help) + '</p><ul class="perf-list">' + items + "</ul></div>";
   }
 
-  function curveSvg(curve) {
-    if (!curve || curve.length < 2) {
-      return '<p class="def">N/A — at least two dated closed-trade days are needed to draw a curve. Any total above is cumulative closed-trade P/L, not account equity.</p>';
+  function monthPoints(curve) {
+    const map = new Map();
+    (curve || []).forEach(function (point) {
+      const key = String(point.date || "").slice(0, 7);
+      if (!key) return;
+      map.set(key, (map.get(key) || 0n) + point.dayCents);
+    });
+    return Array.from(map.keys()).sort().map(function (key) {
+      return { label: key, cents: map.get(key) };
+    });
+  }
+
+  function chartLabel(text) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      const date = ST.parseDateKey(text);
+      return date ? ST.formatShortDate(date) : text;
     }
+    if (/^\d{4}-\d{2}$/.test(text)) {
+      const date = ST.parseDateKey(text + "-01");
+      return date ? ST.formatShortDate(date).replace(/\s+\d+$/, "") + " " + date.getFullYear() : text;
+    }
+    return text;
+  }
+
+  function tipText(label, cents) {
+    return chartLabel(label) + " · " + (typeof cents === "bigint" ? ST.formatCents(cents) : "N/A");
+  }
+
+  function axisMoney(cents) {
+    const n = Math.round(Number(cents));
+    return ST.formatCents(BigInt(n), "plain");
+  }
+
+  function barSvg(points, title) {
+    const rows = (points || []).filter(function (point) { return typeof point.cents === "bigint"; });
+    if (!rows.length) {
+      return '<p class="empty">Not enough closed trades to draw this chart. Nothing is filled in as zero.</p>';
+    }
+    if (rows.length > 8) return verticalBars(rows, title);
+    const rowH = 44;
+    const height = 28 + rows.length * rowH;
     const width = 640;
-    const height = 140;
-    const pad = 10;
+    const labelW = 92;
+    const valueW = 88;
+    const plotL = labelW + 8;
+    const plotR = width - valueW;
+    const plotW = plotR - plotL;
+    let maxAbs = 1;
+    rows.forEach(function (point) {
+      const value = Math.abs(Number(point.cents));
+      if (value > maxAbs) maxAbs = value;
+    });
+    const mixed = rows.some(function (point) { return point.cents > 0n; }) && rows.some(function (point) { return point.cents < 0n; });
+    const zeroX = mixed ? plotL + plotW / 2 : plotL;
+    const scale = mixed ? (plotW / 2) / maxAbs : plotW / maxAbs;
+    let guides = "";
+    [0.5, 1].forEach(function (step) {
+      if (!mixed) {
+        const x = plotL + plotW * step;
+        guides += '<line class="grid" x1="' + x.toFixed(1) + '" y1="16" x2="' + x.toFixed(1) + '" y2="' + (height - 8) + '"></line>';
+      }
+    });
+    const bars = rows.map(function (point, index) {
+      const y = 16 + index * rowH;
+      const value = Number(point.cents);
+      const len = Math.min(plotW, Math.abs(value) * scale);
+      const x = value < 0 && mixed ? zeroX - len : zeroX;
+      const cls = value > 0 ? "up" : value < 0 ? "down" : "flatbar";
+      const tip = tipText(point.label, point.cents);
+      const barH = 12;
+      const barY = y + (rowH - barH) / 2;
+      return '<text class="axis" x="4" y="' + (y + rowH / 2 + 4) + '">' + ST.escapeHtml(chartLabel(point.label)) + "</text>" +
+        '<rect class="hit" x="' + plotL + '" y="' + y + '" width="' + plotW + '" height="' + rowH + '" tabindex="0" data-tip="' + ST.escapeHtml(tip) + '" role="img" aria-label="' + ST.escapeHtml(tip) + '"><title>' + ST.escapeHtml(tip) + "</title></rect>" +
+        '<rect class="' + cls + '" x="' + x.toFixed(1) + '" y="' + barY.toFixed(1) + '" width="' + Math.max(value === 0 ? 2 : len, 2).toFixed(1) + '" height="' + barH + '" rx="3"></rect>' +
+        '<text class="axis" x="' + (width - 8) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end">' + ST.escapeHtml(ST.formatCents(point.cents)) + "</text>";
+    }).join("");
+    const label = title + ". Realized closed trades only. Not account equity.";
+    return '<svg class="bars" viewBox="0 0 ' + width + " " + height + '" role="group" aria-label="' + ST.escapeHtml(label) + '">' +
+      guides +
+      '<line class="zero" x1="' + zeroX.toFixed(1) + '" y1="12" x2="' + zeroX.toFixed(1) + '" y2="' + (height - 6) + '"></line>' +
+      bars + "</svg>";
+  }
+
+  function verticalBars(rows, title) {
+    const slot = 48;
+    const height = 210;
+    const left = 56;
+    const bottom = 36;
+    const top = 16;
+    const width = left + 12 + rows.length * slot;
+    let min = 0;
+    let max = 0;
+    rows.forEach(function (point) {
+      const value = Number(point.cents);
+      if (value < min) min = value;
+      if (value > max) max = value;
+    });
+    const span = (max - min) || 1;
+    function yOf(value) { return top + ((max - value) * (height - top - bottom)) / span; }
+    const zeroY = yOf(0);
+    const guides = [max, 0, min].map(function (value) {
+      const y = yOf(value);
+      return '<line class="grid" x1="' + left + '" y1="' + y.toFixed(1) + '" x2="' + (width - 8) + '" y2="' + y.toFixed(1) + '"></line>' +
+        '<text class="axis" x="' + (left - 6) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + ST.escapeHtml(axisMoney(value)) + "</text>";
+    }).join("");
+    const bars = rows.map(function (point, index) {
+      const value = Number(point.cents);
+      const x = left + 8 + index * slot;
+      const y = yOf(value);
+      const topY = Math.min(y, zeroY);
+      const h = Math.max(2, Math.abs(zeroY - y));
+      const cls = value > 0 ? "up" : value < 0 ? "down" : "flatbar";
+      const tip = tipText(point.label, point.cents);
+      const showLabel = rows.length <= 14 || index % 2 === 0;
+      return '<rect class="hit" x="' + x.toFixed(1) + '" y="' + top + '" width="' + (slot - 8) + '" height="' + (height - top - bottom) + '" tabindex="0" data-tip="' + ST.escapeHtml(tip) + '" role="img" aria-label="' + ST.escapeHtml(tip) + '"><title>' + ST.escapeHtml(tip) + "</title></rect>" +
+        '<rect class="' + cls + '" x="' + (x + 10).toFixed(1) + '" y="' + topY.toFixed(1) + '" width="16" height="' + h.toFixed(1) + '" rx="3"></rect>' +
+        (showLabel ? '<text class="axis" x="' + (x + 18).toFixed(1) + '" y="' + (height - 14) + '" text-anchor="end" transform="rotate(-40 ' + (x + 18).toFixed(1) + " " + (height - 14) + ')">' + ST.escapeHtml(chartLabel(point.label)) + "</text>" : "");
+    }).join("");
+    return '<div class="chart-scroll"><svg class="bars" style="min-width:' + Math.max(280, width / 2) + 'px" viewBox="0 0 ' + width + " " + height + '" role="group" aria-label="' + ST.escapeHtml(title + ". Not account equity.") + '">' +
+      guides + '<line class="zero" x1="' + left + '" y1="' + zeroY.toFixed(1) + '" x2="' + (width - 8) + '" y2="' + zeroY.toFixed(1) + '"></line>' + bars + "</svg></div>";
+  }
+
+  function curveSvg(curve, metrics) {
+    if (!curve || curve.length < 2) {
+      const why = !curve || !curve.length
+        ? "No curve yet. A curve needs at least two closed days."
+        : "One closed day is not enough to draw a curve. The totals above are that closed result, not a filled-in zero.";
+      return '<p class="empty">' + why + " This is not account equity.</p>";
+    }
+    const width = 720;
+    const height = 248;
+    const left = 72;
+    const right = 16;
+    const top = 18;
+    const bottom = 36;
     let min = 0;
     let max = 0;
     curve.forEach(function (point) {
@@ -577,16 +934,89 @@
       if (value < min) min = value;
       if (value > max) max = value;
     });
+    const pad = (max - min) * 0.12 || 100;
+    min -= pad;
+    max += pad;
+    if (min > 0) min = 0;
+    if (max < 0) max = 0;
     const span = (max - min) || 1;
+    function xOf(index) {
+      return left + (index * (width - left - right)) / (curve.length - 1);
+    }
+    function yOf(value) {
+      return top + ((max - value) * (height - top - bottom)) / span;
+    }
+    const peak = curve.reduce(function (best, point) { return point.cents > best ? point.cents : best; }, curve[0].cents);
+    const zeroY = yOf(0);
+    const peakY = yOf(Number(peak));
     const coords = curve.map(function (point, index) {
-      const x = pad + (index * (width - pad * 2)) / (curve.length - 1);
-      const y = pad + ((max - Number(point.cents)) * (height - pad * 2)) / span;
-      return x.toFixed(1) + "," + y.toFixed(1);
+      return xOf(index).toFixed(1) + "," + yOf(Number(point.cents)).toFixed(1);
     }).join(" ");
-    const zeroY = pad + ((max - 0) * (height - pad * 2)) / span;
+    const area = xOf(0).toFixed(1) + "," + zeroY.toFixed(1) + " " + coords + " " + xOf(curve.length - 1).toFixed(1) + "," + zeroY.toFixed(1);
+    let grid = "";
+    for (let i = 0; i <= 4; i++) {
+      const value = min + (span * i) / 4;
+      const y = yOf(value);
+      grid += '<line class="grid" x1="' + left + '" y1="' + y.toFixed(1) + '" x2="' + (width - right) + '" y2="' + y.toFixed(1) + '"></line>';
+      grid += '<text class="axis" x="' + (left - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + ST.escapeHtml(axisMoney(value)) + "</text>";
+    }
+    const labelCount = curve.length > 12 ? 5 : curve.length > 6 ? 4 : curve.length;
+    const labelIndexes = [];
+    for (let step = 0; step < labelCount; step++) {
+      const index = Math.round(step * (curve.length - 1) / Math.max(1, labelCount - 1));
+      if (labelIndexes.indexOf(index) === -1) labelIndexes.push(index);
+    }
+    const xLabels = labelIndexes.map(function (index) {
+      return '<text class="axis" x="' + xOf(index).toFixed(1) + '" y="' + (height - 10) + '" text-anchor="middle">' + ST.escapeHtml(chartLabel(curve[index].date)) + "</text>";
+    }).join("");
+    const slot = (width - left - right) / curve.length;
+    const hits = curve.map(function (point, index) {
+      const tip = tipText(point.date, point.cents) + " cumulative";
+      let x = xOf(index) - slot / 2;
+      let w = slot;
+      if (x < left) { w -= left - x; x = left; }
+      if (x + w > width - right) w = width - right - x;
+      return '<rect class="hit" x="' + x.toFixed(1) + '" y="' + top + '" width="' + Math.max(8, w).toFixed(1) + '" height="' + (height - top - bottom) + '" tabindex="0" data-tip="' + ST.escapeHtml(tip) + '" role="img" aria-label="' + ST.escapeHtml(tip) + '"><title>' + ST.escapeHtml(tip) + "</title></rect>";
+    }).join("");
     const end = curve[curve.length - 1];
-    const label = "Cumulative closed-trade P/L from " + curve[0].date + " to " + end.date + ", ending at " + ST.formatCents(end.cents) + ". This is not account equity.";
-    return '<svg class="curve" viewBox="0 0 ' + width + " " + height + '" role="img" aria-label="' + ST.escapeHtml(label) + '"><line class="zero" x1="' + pad + '" y1="' + zeroY.toFixed(1) + '" x2="' + (width - pad) + '" y2="' + zeroY.toFixed(1) + '"></line><polyline points="' + coords + '"></polyline></svg>';
+    let marks = "";
+    const best = metrics && metrics.bestDay;
+    const worst = metrics && metrics.worstDay;
+    curve.forEach(function (point, index) {
+      if (best && point.date === best.date && best.cents > 0n) {
+        marks += '<circle class="mark-win" cx="' + xOf(index).toFixed(1) + '" cy="' + yOf(Number(point.cents)).toFixed(1) + '" r="5"></circle>';
+      }
+      if (worst && point.date === worst.date && worst.cents < 0n) {
+        marks += '<circle class="mark-loss" cx="' + xOf(index).toFixed(1) + '" cy="' + yOf(Number(point.cents)).toFixed(1) + '" r="5"></circle>';
+      }
+    });
+    const endTip = tipText(end.date, end.cents);
+    const label = "Cumulative closed-trade P/L from " + curve[0].date + " to " + end.date + ", ending at " + ST.formatCents(end.cents) + ". All-time high " + ST.formatCents(peak) + ". This is not account equity.";
+    const legend = '<ul class="chart-legend"><li><span class="swatch ath"></span> All-time high ' + ST.escapeHtml(ST.formatCents(peak, "plain")) + "</li>" +
+      (best && best.cents > 0n ? '<li><span class="swatch win"></span> Biggest win ' + ST.escapeHtml(chartLabel(best.date) + " " + ST.formatCents(best.cents)) + "</li>" : "") +
+      (worst && worst.cents < 0n ? '<li><span class="swatch loss"></span> Biggest loss ' + ST.escapeHtml(chartLabel(worst.date) + " " + ST.formatCents(worst.cents)) + "</li>" : "") +
+      "<li>End " + ST.escapeHtml(endTip) + "</li></ul>";
+    return '<svg class="curve" viewBox="0 0 ' + width + " " + height + '" role="group" aria-label="' + ST.escapeHtml(label) + '">' +
+      grid +
+      '<line class="ath" x1="' + left + '" y1="' + peakY.toFixed(1) + '" x2="' + (width - right) + '" y2="' + peakY.toFixed(1) + '"></line>' +
+      '<polygon class="area" points="' + area + '"></polygon>' +
+      '<polyline class="series" points="' + coords + '"></polyline>' +
+      marks + hits + xLabels + "</svg>" + legend;
+  }
+
+  function showChartTip(el, text) {
+    const tip = document.getElementById("chartTip");
+    if (!tip || !text) return;
+    tip.hidden = false;
+    tip.textContent = text;
+    const rect = el.getBoundingClientRect();
+    tip.style.left = (rect.left + rect.width / 2) + "px";
+    tip.style.top = rect.top + "px";
+  }
+
+  function hideChartTip() {
+    const tip = document.getElementById("chartTip");
+    if (tip) tip.hidden = true;
   }
 
   function weekHtml(weeks) {
@@ -637,7 +1067,7 @@
     const rows = detail.trades.map(function (result) {
       return "<li><span><strong>" + ST.escapeHtml(result.symbol) + "</strong> " + ST.escapeHtml(result.direction) + "</span>" + moneyHtml(result.netCents) + "</li>";
     }).join("");
-    return "<h3>Closed trades</h3><ul class=\"perf-list\">" + rows + "</ul><p>Total " + ST.escapeHtml(ST.formatCents(detail.tradeCents)) + " " + ST.pnlWord(detail.tradeCents) + ". Edit a trade from Positions. This total is not added to the manual entry.</p>";
+    return "<h3>Closed trades</h3><ul class=\"perf-list\">" + rows + "</ul><p>Total " + ST.escapeHtml(ST.formatCents(detail.tradeCents)) + " " + ST.pnlWord(detail.tradeCents) + ". Edit a trade from Trades. This total is not added to the manual entry.</p>";
   }
 
   function updateTradeChrome() {
@@ -868,6 +1298,7 @@
       entryPrice: document.getElementById("riskEntry").value,
       stopPrice: document.getElementById("riskStop").value,
       direction: document.getElementById("riskDirection").value,
+      targetPrice: document.getElementById("riskTarget").value,
       remember: document.getElementById("riskRemember").checked
     };
   }
@@ -936,6 +1367,8 @@
     return {
       filter: valueOf("positionFilter"),
       symbol: valueOf("positionSymbol"),
+      direction: valueOf("positionDirection"),
+      strategy: valueOf("positionStrategy"),
       from: valueOf("positionFrom"),
       to: valueOf("positionTo")
     };
@@ -1100,7 +1533,7 @@
   }
 
   function syncWidgets(current) {
-    if (!current || current.tab !== "dashboard" || !ST.mountChart) return;
+    if (!current || current.tab !== "markets" || !ST.mountChart) return;
     const settings = current.data.settings || {};
     const fallback = current.data.trades.find(function (trade) { return trade.symbol; });
     const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";

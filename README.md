@@ -4,11 +4,11 @@ A local-first trading journal for any ticker. Static site, no build step, no acc
 
 Bryz Trades records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
 
-The only external script is TradingView’s official chart embed, loaded when the dashboard is open. It is not an API key, and Bryz Trades does not read prices out of it.
+The only external script is TradingView’s official chart embed, loaded when Markets is open. It is not an API key, and Bryz Trades does not read prices out of it. Performance charts on Overview and Analytics are drawn from the journal in the page. They are not TradingView, and they do not use a chart library.
 
 ## Screens
 
-Dashboard, Positions, Calendar, Analytics, and Settings. On a phone they sit in the bottom bar. On a wider screen they sit in the side list. Dark is the default. The theme button switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting.
+Overview, Markets, Trades, Risk, Analytics, Calendar, and Settings. On a phone the section list scrolls in the bottom bar. On a wider screen it sits in the side list. Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
 
 The first visit starts with SOFI as an open long at the old checklist levels ($18.00 / $18.00 / $16.92). If this browser still has the previous tracker or the original SOFI card, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
 
@@ -16,15 +16,17 @@ The first visit starts with SOFI as an open long at the old checklist levels ($1
 
 Any ticker or ETF that fits a symbol such as `AAPL`, `BRK.B`, or `SOFI` can be recorded. The chart box also accepts an optional exchange (`NASDAQ`, `NYSE`). A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
 
-The dashboard watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol loads its chart and the symbol detail. Detail shows realized results for that symbol. Market price and portfolio market value stay **N/A**. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date.
+The Markets watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol loads its chart and the symbol detail. Detail shows realized results for that symbol. Market price and portfolio market value stay **N/A**. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date. A missing mark is unavailable, not a live quote.
 
-Positions filter by status, symbol, and date. A date filter keeps a trade when its entry date, exit date, or a partial-exit date falls in the range. Analytics uses the same symbol and status filters on top of the exit-date range. Filtering does not delete anything.
+Trades filter by status, symbol, direction, strategy, and date. A date filter keeps a trade when its entry date, exit date, or a partial-exit date falls in the range. Analytics uses the same symbol and status filters on top of the exit-date range. Filtering does not delete anything. Open is the status for a position that is not realized, including one that only has a plan.
 
 ## Chart
 
-The dashboard loads TradingView’s Advanced Chart from `https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js` only, and the watchlist tape from `https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js` only. Nothing else is loaded from a CDN.
+Markets loads TradingView’s Advanced Chart from `https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js` only, and the watchlist tape from `https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js` only. Nothing else is loaded from a CDN. No chart library is vendored.
 
-The chart is created when the dashboard is showing. Period buttons are 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, and MAX. The widget theme follows the light or dark theme. The chart is attributed to TradingView, and the data may be delayed. The embed runs in a sandboxed frame so it cannot read or clear the journal in this page’s storage. If the script is blocked or does not paint within 8 seconds, the page shows a fallback and leaves your trades alone. Chart prices are never copied into an entry, an exit, or a mark.
+The price chart is created when Markets is showing. Period buttons are 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, and MAX. The widget theme follows the light or dark theme. The chart is attributed to TradingView, and the data may be delayed. The embed runs in a sandboxed frame so it cannot read or clear the journal in this page’s storage. If the script is blocked or does not paint within 8 seconds, the page shows a fallback and leaves your trades alone. Chart prices are never copied into an entry, an exit, or a mark.
+
+Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity.
 
 ## Statuses
 
@@ -108,7 +110,24 @@ Manual day entries are the old hand-typed daily results, kept and labeled `manua
 
 The cumulative curve is closed-trade P/L by exit date. Same-day trades are summed before the peak is updated. Drawdown is how far that cumulative total sits below its previous peak, starting from zero. It is not account equity. Deposits, withdrawals, open positions, and margin are not inside it.
 
-Gross profit is the sum of winning nets. Gross loss is the sum of losing nets as a positive amount. Profit factor is gross profit ÷ gross loss. A winning or losing trade is classified on net, after fees.
+Gross profit is the sum of winning nets. Gross loss is the sum of losing nets as a positive amount. Profit factor is gross profit ÷ gross loss. A winning or losing trade is classified on net, after fees. A net of exactly zero is a breakeven: it counts in the win-rate denominator and in neither gross profit nor gross loss.
+
+Each dated exit lot is its own closed result. A position that is only partly sold contributes one result per lot, and the unsold shares stay open.
+
+Worked example, eight trades, all in cents:
+
+| Trade | Result |
+| --- | --- |
+| Long 10 @ 100, exit 112, fee $2 | net +11800 |
+| Short 5 @ 50, exit 40, fee $0 | net +5000 |
+| Long 8 @ 25, exit 20, fee $1.25 | net −4125 |
+| Long 3 @ 15, exit 15, fee $0 | net 0, breakeven |
+| Long 10 @ 80, sell 4 @ 90 fee $1 and 2 @ 70 fee $0, 4 still open, stop 75 | lots +3900 and −2000; planned risk on the rest 2000 |
+| Short 2 @ 60, exit 66, fee $0.50 | net −1250 |
+| Open long 10 @ 100, stop 95 | not realized; planned risk 5000 |
+| Open long 6 @ 12, no stop | not realized; left out of planned risk |
+
+Realized net +13325. Three wins, three losses, one breakeven, so the win rate is 3/7 = 42.9%. Average win 6900. Average loss −2458. Profit factor 20700/7375 = 2.81. Cumulative peak is +16800 after the second win; the Feb 2 loss pulls the curve to +12675, a drawdown of 4125, which is the max. Planned risk on the two open stops is 7000. A manual day on the same date is not in any of those figures.
 
 ## Risk calculator
 
@@ -116,7 +135,9 @@ Gross profit is the sum of winning nets. Gross loss is the sum of losing nets as
 
 Per share, a long uses `entry − stop` and the stop must be below the entry. A short uses `stop − entry` and the stop must be above the entry. Quantity is planned risk ÷ risk per share, rounded to 4 decimal shares, half away from zero.
 
-The result is a planning estimate. It is not financial advice and it does not place an order. Actual losses can be larger because of gaps, slippage, fees, and execution.
+The result is a planning estimate. It is not financial advice and it does not place an order. A stop does not guarantee the maximum loss. Actual losses can be larger because of gaps, slippage, fees, and execution. An optional target shows potential reward and reward-to-risk when it sits on the profitable side of the entry. A missing or unusable target does not change the size. Remembering account size and risk percent merges those two fields into the saved settings. It does not replace the watchlist or the selected symbol, and it does not change a risk limit on its own.
+
+Planned risk on Overview is the sum, for open positions, of remaining shares times the distance from the recorded entry to the recorded hard stop, when the stop is on the correct side. Positions missing an entry, a stop, or a share count are skipped and labeled. That figure is a plan. It is not a live stop, and Bryz Trades does not check whether the market traded there. If you have saved an account size, the page also shows that sum as a percent of it.
 
 ## Backup
 

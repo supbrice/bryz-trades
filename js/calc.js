@@ -59,6 +59,9 @@
     maxDrawdown: "Largest peak-to-trough drop in the daily cumulative closed-trade total. Same-day trades are summed before the peak is updated. N/A when there is no dated closed trade.",
     byTicker: "Realized net for each ticker, using the same closed trades as the other metrics.",
     byStrategy: "Realized net for each strategy you recorded. Trades with no strategy are grouped as (No strategy).",
+    byDirection: "Realized net for long and short, using the same closed trades as the other metrics.",
+    avgTrade: "Average net profit and loss per counted closed trade. N/A when there are no counted trades.",
+    plannedRisk: "Sum of remaining shares times the distance from the recorded entry to the recorded hard stop, for open positions where the stop is on the correct side. Incomplete plans are skipped. This is not a live stop and does not check the market.",
     unrealized: "Unrealized profit and loss uses only a mark price you type, times the shares still open, at the same average entry used for realized exits. N/A when you have not entered a mark. Chart prices are never used.",
     portfolioValue: "N/A. Bryz Trades does not infer portfolio market value, cash, or holdings value from the chart or from trade history."
   };
@@ -511,6 +514,7 @@
       winRate: null,
       avgWinCents: null,
       avgLossCents: null,
+      avgTradeCents: null,
       bestDay: null,
       worstDay: null,
       cumulativeCents: null,
@@ -518,6 +522,7 @@
       maxDrawdownCents: null,
       byTicker: [],
       byStrategy: [],
+      byDirection: [],
       curve: [],
       excludedOpen: 0,
       excludedCancelled: 0,
@@ -577,6 +582,7 @@
     const byDay = new Map();
     const tickers = new Map();
     const strategies = new Map();
+    const directions = new Map();
 
     dated.forEach(function (result) {
       metrics.tradeCount += 1;
@@ -597,6 +603,7 @@
       byDay.set(result.exitDate, (byDay.get(result.exitDate) || 0n) + result.netCents);
       addGroup(tickers, result.symbol || "(No ticker)", result);
       addGroup(strategies, result.strategy ? result.strategy : "(No strategy)", result);
+      addGroup(directions, result.direction === "short" ? "Short" : "Long", result);
     });
 
     metrics.realizedNetCents = net;
@@ -606,9 +613,11 @@
     metrics.winRate = formatPercent(BigInt(metrics.wins), BigInt(metrics.tradeCount), 1);
     metrics.avgWinCents = metrics.wins ? money.divRound(winSum, BigInt(metrics.wins)) : null;
     metrics.avgLossCents = metrics.losses ? money.divRound(lossSum, BigInt(metrics.losses)) : null;
+    metrics.avgTradeCents = money.divRound(net, BigInt(metrics.tradeCount));
     metrics.profitFactor = grossLoss === 0n ? null : formatRatio(grossProfit, grossLoss, 2);
     metrics.byTicker = groupList(tickers);
     metrics.byStrategy = groupList(strategies);
+    metrics.byDirection = groupList(directions);
 
     const days = Array.from(byDay.keys()).sort();
     let peak = 0n;
@@ -888,6 +897,7 @@
     const planned = money.divRound(account * percent, 10000n);
     const perShareCents = money.divRound(perShareTicks, 100n);
     const quantityTicks = money.divRound(planned * 1000000n, perShareTicks);
+    const reward = rewardFromTarget(src.direction, entry, perShareTicks, quantityTicks, src.targetPrice);
     return {
       ok: true,
       error: "",
@@ -895,7 +905,74 @@
       perShareRiskCents: perShareCents,
       quantityTicks: quantityTicks,
       quantityText: trimScale(money.formatScaled(quantityTicks, 4)),
+      equityPercent: formatPercent(planned, account, 2),
+      rewardCents: reward.rewardCents,
+      rewardPerShareCents: reward.rewardPerShareCents,
+      rewardToRisk: reward.rewardToRisk,
+      rewardNote: reward.rewardNote,
       disclaimer: RISK_DISCLAIMER
+    };
+  }
+
+  function rewardFromTarget(direction, entry, perShareTicks, quantityTicks, targetPrice) {
+    const empty = { rewardCents: null, rewardPerShareCents: null, rewardToRisk: null, rewardNote: "" };
+    if (targetPrice == null || String(targetPrice).trim() === "") return empty;
+    const target = money.parsePriceTicks(targetPrice);
+    if (target == null || target <= 0n) {
+      return Object.assign({}, empty, { rewardNote: "Target was not a usable price, so reward was not calculated. Size still uses the stop." });
+    }
+    const rewardTicks = direction === "short" ? entry - target : target - entry;
+    if (rewardTicks <= 0n) {
+      return Object.assign({}, empty, {
+        rewardNote: direction === "short"
+          ? "For a short, the target has to be below the entry to show a reward. Size still uses the stop."
+          : "For a long, the target has to be above the entry to show a reward. Size still uses the stop."
+      });
+    }
+    return {
+      rewardCents: money.divRound(rewardTicks * quantityTicks, 1000000n),
+      rewardPerShareCents: money.divRound(rewardTicks, 100n),
+      rewardToRisk: perShareTicks > 0n ? formatRatio(rewardTicks, perShareTicks, 2) : null,
+      rewardNote: "Potential reward uses the target you typed and the same share count as the size estimate. It is not a filled exit."
+    };
+  }
+
+  function plannedOpenRisk(journal) {
+    const trades = dedupeTrades(journal && journal.trades);
+    let cents = 0n;
+    let included = 0;
+    let skipped = 0;
+    trades.forEach(function (trade) {
+      if (!trade || trade.status !== "open") return;
+      const books = positionAccounting(trade);
+      if (books.remainingQty == null || books.remainingQty <= 0) return;
+      const entryPrice = effectiveEntry(trade);
+      const entry = money.parsePriceTicks(entryPrice);
+      const stop = money.parsePriceTicks(trade.hardStop);
+      const qty = money.parseQtyTicks(books.remainingQty);
+      if (entry == null || stop == null || qty == null || qty <= 0n) {
+        skipped += 1;
+        return;
+      }
+      const diff = trade.direction === "short" ? stop - entry : entry - stop;
+      if (diff <= 0n) {
+        skipped += 1;
+        return;
+      }
+      const risk = money.divRound(diff * qty, 1000000n);
+      if (typeof risk !== "bigint") {
+        skipped += 1;
+        return;
+      }
+      cents += risk;
+      included += 1;
+    });
+    const account = journal && journal.settings ? money.parseCents(journal.settings.accountSize) : null;
+    return {
+      cents: included ? cents : null,
+      included: included,
+      skipped: skipped,
+      equityPercent: included && account != null && account > 0n ? formatPercent(cents, account, 2) : null
     };
   }
 
@@ -1031,6 +1108,7 @@
     dayDetail: dayDetail,
     summarizeKeys: summarizeKeys,
     positionRisk: positionRisk,
+    plannedOpenRisk: plannedOpenRisk,
     tradesToCsv: tradesToCsv,
     dailyToCsv: dailyToCsv
   };

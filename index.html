@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#070b12" />
+  <meta name="theme-color" content="#090B0A" />
   <script>
     (function () {
       var key = "stock-tracker-theme";
@@ -15,7 +15,7 @@
       } catch (e) {}
       document.documentElement.setAttribute("data-theme", theme);
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", theme === "light" ? "#f4f7fb" : "#070b12");
+      if (meta) meta.setAttribute("content", theme === "light" ? "#F3F6F3" : "#090B0A");
     })();
   </script>
   <meta name="description" content="Bryz Trades — a local trading journal. Not financial advice." />
@@ -30,7 +30,7 @@
 <body>
   <div class="app">
     <header class="topbar">
-      <div>
+      <div class="brand-row">
         <div class="brand">
           <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
             <line x1="32" y1="8" x2="32" y2="56" stroke-width="5"/>
@@ -41,9 +41,6 @@
           </svg>
           <h1>Bryz Trades</h1>
         </div>
-        <p class="sub">A local trading journal for any ticker. <strong>Not financial advice.</strong> Does not place trades. A chart, when it loads, is not written into your trades.</p>
-      </div>
-      <div class="header-actions">
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
           <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
             <circle cx="12" cy="12" r="4"></circle>
@@ -55,29 +52,63 @@
           <span class="visually-hidden" id="themeToggleLabel">Dark</span>
         </button>
       </div>
+      <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
     </header>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
     <div class="shell">
+      <div class="tab-shell">
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Dashboard</button>
-        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Positions</button>
-        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
+        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Overview</button>
+        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets">Markets</button>
+        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Trades</button>
+        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk">Risk</button>
         <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics">Analytics</button>
+        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
         <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
       </nav>
+      </div>
 
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Overview</h2>
+              <button type="button" id="dashAddTrade" class="primary">Log trade</button>
+            </div>
+            <div class="range-bar">
+              <label>Period
+                <select id="overviewPreset">
+                  <option value="ytd">Year to date</option>
+                  <option value="month">This month</option>
+                  <option value="all">All dated closes</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>From
+                <input id="overviewFrom" type="date" />
+              </label>
+              <label>To
+                <input id="overviewTo" type="date" />
+              </label>
+            </div>
+            <p class="hint">Recorded exits only. A price you type is an estimate. A stop is a plan, not a market fill.</p>
+            <div id="dashboardBody"></div>
+            <div class="button-row shortcuts">
+              <button type="button" id="dashPositions">Open positions</button>
+              <button type="button" id="gotoAnalytics">Analytics</button>
+              <button type="button" id="gotoCalendar">Calendar</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-markets" class="view" role="tabpanel" aria-labelledby="tab-markets" hidden>
           <div class="panel chart-panel">
             <div class="panel-head">
-              <h2>Chart</h2>
-              <div class="button-row tight">
-                <button type="button" id="dashAddTrade" class="primary">Add trade</button>
-                <button type="button" id="dashPositions">Review positions</button>
-              </div>
+              <h2>Markets</h2>
             </div>
+            <p class="hint">Display only. Chart prices are not saved into trades.</p>
             <form id="symbolForm" class="symbol-bar">
               <label>Symbol
                 <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
@@ -118,22 +149,15 @@
             <div id="watchlistBody"></div>
             <div id="tapeMount" class="tape-mount" role="region" aria-label="Watchlist prices"></div>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Journal</h2>
-            </div>
-            <p class="hint">Realized figures use recorded exits only. Unrealized figures need a mark you type. This is not account equity, cash, or a live portfolio value.</p>
-            <div id="dashboardBody"></div>
-          </div>
         </section>
 
         <section id="view-positions" class="view" role="tabpanel" aria-labelledby="tab-positions" hidden>
           <div class="panel">
             <div class="panel-head">
-              <h2>Positions</h2>
-              <button type="button" id="addTradeBtn" class="primary">Add trade</button>
+              <h2>Trades</h2>
+              <button type="button" id="addTradeBtn" class="primary">Log trade</button>
             </div>
-            <p class="hint">Each card is a trade you recorded. A target or hard stop is a plan, not an exit.</p>
+            <p class="hint">A target or stop is a plan you wrote down, not a fill.</p>
             <details class="legend">
               <summary>What the statuses mean</summary>
               <ul>
@@ -153,6 +177,16 @@
               </label>
               <label>Symbol
                 <input id="positionSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
+              </label>
+              <label class="inline-field">Direction
+                <select id="positionDirection">
+                  <option value="all">Any direction</option>
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </label>
+              <label>Strategy
+                <input id="positionStrategy" maxlength="40" autocomplete="off" placeholder="Any" />
               </label>
               <label>From
                 <input id="positionFrom" type="date" />
@@ -188,7 +222,13 @@
             <div class="panel-head">
               <h2>Analytics</h2>
             </div>
-            <p class="hint">Every metric below uses the same closed trades: a recorded exit price, quantity, and exit date in the range. Open trades are not estimates of profit.</p>
+            <p class="hint">Closed trades in the range only. Open trades are not counted as profit.</p>
+            <div class="seg" role="group" aria-label="Analytics breakdown">
+              <button type="button" data-pane="overview" aria-pressed="true">Overview</button>
+              <button type="button" data-pane="symbol" aria-pressed="false">Symbol</button>
+              <button type="button" data-pane="strategy" aria-pressed="false">Strategy</button>
+              <button type="button" data-pane="time" aria-pressed="false">Time</button>
+            </div>
             <div class="range-bar">
               <label>Range
                 <select id="rangePreset">
@@ -221,6 +261,47 @@
           </div>
         </section>
 
+        <section id="view-risk" class="view" role="tabpanel" aria-labelledby="tab-risk" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Risk</h2>
+            </div>
+            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss. Remember saves only account size and risk percent.</p>
+            <div class="row-2">
+              <label>Account size ($)
+                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
+              </label>
+              <label>Risk percent
+                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Entry price ($)
+                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
+              </label>
+              <label>Stop price ($)
+                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Direction
+                <select id="riskDirection">
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </label>
+              <label>Planned target ($)
+                <input id="riskTarget" inputmode="decimal" autocomplete="off" placeholder="Optional" />
+              </label>
+            </div>
+            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
+            <div class="button-row">
+              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
+            </div>
+            <div id="riskResult" class="result-box" role="status"></div>
+          </div>
+        </section>
+
         <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings" hidden>
           <div class="panel">
             <div class="panel-head">
@@ -239,35 +320,6 @@
               <button type="button" id="importBtn">Choose JSON file</button>
               <input type="file" id="importFile" accept="application/json,.json" hidden />
             </div>
-            <h3 class="section-title">Risk calculator</h3>
-            <p class="hint" id="riskDisclaimer">Optional planning math from the numbers you type. It is not financial advice and does not place an order. Actual losses can exceed the planned risk because of gaps, slippage, fees, and execution.</p>
-            <div class="row-2">
-              <label>Account size ($)
-                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
-              </label>
-              <label>Risk percent
-                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
-              </label>
-            </div>
-            <div class="row-2">
-              <label>Entry price ($)
-                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
-              </label>
-              <label>Stop price ($)
-                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
-              </label>
-            </div>
-            <label>Direction
-              <select id="riskDirection">
-                <option value="long">Long</option>
-                <option value="short">Short</option>
-              </select>
-            </label>
-            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
-            <div class="button-row">
-              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
-            </div>
-            <div id="riskResult" class="result-box" role="status"></div>
             <h3 class="section-title">How saving works</h3>
             <div id="storageHelp" class="prose">
               <p>The journal is stored in this browser’s local storage on this device. It is not an account, and it is not sent to a server.</p>
@@ -282,6 +334,7 @@
     </div>
 
     <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
+    <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
   </div>
 
   <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">
