@@ -2,7 +2,7 @@
 (function (root) {
   const ST = root.StockTracker = root.StockTracker || {};
   const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const TABS = ["dashboard", "positions", "calendar", "analytics", "settings"];
+  const TABS = ["dashboard", "markets", "positions", "risk", "analytics", "calendar", "settings"];
 
   let handlers = {};
   let state = null;
@@ -21,8 +21,17 @@
     document.getElementById("logTodayBtn").addEventListener("click", function () { handlers.openDay(ST.dateKey(state.today)); });
     document.getElementById("positionFilter").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionSymbol").addEventListener("input", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionDirection").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionStrategy").addEventListener("input", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionFrom").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
     document.getElementById("positionTo").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("overviewPreset").addEventListener("change", function () { handlers.setOverview({ preset: this.value }); });
+    document.getElementById("overviewFrom").addEventListener("change", function () {
+      handlers.setOverview({ preset: "custom", from: this.value, to: document.getElementById("overviewTo").value });
+    });
+    document.getElementById("overviewTo").addEventListener("change", function () {
+      handlers.setOverview({ preset: "custom", from: document.getElementById("overviewFrom").value, to: this.value });
+    });
     document.getElementById("analyticsSymbol").addEventListener("input", function () { handlers.setAnalytics(readAnalyticsQuery()); });
     document.getElementById("analyticsStatus").addEventListener("change", function () { handlers.setAnalytics(readAnalyticsQuery()); });
     document.getElementById("symbolForm").addEventListener("submit", function (event) {
@@ -37,7 +46,11 @@
       if (hint) document.getElementById("symbolExchange").value = hint;
     });
     document.getElementById("dashAddTrade").addEventListener("click", function () { handlers.addTrade(); });
-    document.getElementById("dashPositions").addEventListener("click", function () { handlers.setTab("positions"); });
+    document.getElementById("dashPositions").addEventListener("click", function () {
+      handlers.setFilter({ filter: "open", symbol: "", direction: "all", strategy: "", from: "", to: "" });
+    });
+    document.getElementById("gotoAnalytics").addEventListener("click", function () { handlers.setTab("analytics"); });
+    document.getElementById("gotoCalendar").addEventListener("click", function () { handlers.setTab("calendar"); });
     document.getElementById("addExitBtn").addEventListener("click", function () {
       document.getElementById("exitRows").insertAdjacentHTML("beforeend", exitRowHtml(null));
       updateTradeChrome();
@@ -280,44 +293,94 @@
     });
   }
 
+  function overviewBounds() {
+    const preset = state.overviewPreset || "ytd";
+    if (preset === "all") return { start: "", end: "", label: "All dated closes", ready: true };
+    if (preset === "custom") {
+      const start = state.overviewFrom || "";
+      const end = state.overviewTo || "";
+      if (!start || !end) return { start: start, end: end, label: "Custom range", ready: false, message: "Choose a start and an end date. Both are included. No result is filled in until then." };
+      if (start > end) return { start: start, end: end, label: "Custom range", ready: false, message: "The start date is after the end date." };
+      return { start: start, end: end, label: "Custom range", ready: true };
+    }
+    const range = ST.rangeForPreset(preset === "month" ? "month" : "ytd", state.today);
+    return { start: range.start, end: range.end, label: range.label, ready: true };
+  }
+
   function drawDashboard() {
+    const presetEl = document.getElementById("overviewPreset");
+    if (presetEl && document.activeElement !== presetEl) presetEl.value = state.overviewPreset || "ytd";
+    setIfIdle("overviewFrom", state.overviewFrom || "");
+    setIfIdle("overviewTo", state.overviewTo || "");
+    const bounds = overviewBounds();
     const todayKey = ST.dateKey(state.today);
-    const ytd = ST.rangeForPreset("ytd", state.today);
-    const ytdMetrics = ST.analyze(state.data, { start: ytd.start, end: ytd.end });
-    const all = ST.analyze(state.data);
     const today = ST.dayDetail(state.data, todayKey);
-    const openCount = state.data.trades.filter(function (trade) { return trade.status === "open"; }).length;
-    const recent = all.curve.slice().reverse().slice(0, 1);
-    const closed = state.data.trades.map(ST.tradeResult).filter(function (result) { return result.included; }).sort(function (a, b) {
-      return (b.exitDate || "").localeCompare(a.exitDate || "");
-    }).slice(0, 5);
-    const recentHtml = closed.length
-      ? '<h3 class="section-title">Recent closed trades</h3><ul class="perf-list">' + closed.map(function (result) {
+    const openTrades = state.data.trades.filter(function (trade) { return trade.status === "open"; });
+    const planned = ST.plannedOpenRisk(state.data);
+    const books = ST.portfolioSnapshot(state.data);
+    const metrics = bounds.ready
+      ? ST.analyze(state.data, { start: bounds.start || null, end: bounds.end || null })
+      : null;
+    const closed = [];
+    state.data.trades.forEach(function (trade) {
+      ST.realizedEvents(trade).forEach(function (result) {
+        if (!result.included) return;
+        if (bounds.ready && bounds.start && result.exitDate < bounds.start) return;
+        if (bounds.ready && bounds.end && result.exitDate > bounds.end) return;
+        closed.push(result);
+      });
+    });
+    closed.sort(function (a, b) { return (b.exitDate || "").localeCompare(a.exitDate || ""); });
+    const recent = closed.slice(0, 5);
+    const unrealized = books.unrealizedCents == null
+      ? '<div class="stat" id="dashUnrealized"><div class="label">Unrealized P/L, estimate</div><div class="value na">N/A <span class="tag">no manual mark</span></div></div>'
+      : stat("Unrealized P/L, estimate", books.unrealizedCents, "id=\"dashUnrealized\"");
+    const plannedHtml = planned.cents == null
+      ? '<div class="stat" id="dashPlanned"><div class="label">Planned risk, open positions</div><div class="value na">N/A <span class="tag">' +
+        (planned.skipped ? "stop or entry missing" : "no open plan") + "</span></div></div>"
+      : '<div class="stat" id="dashPlanned"><div class="label">Planned risk, open positions</div><div class="value flat">' +
+        ST.escapeHtml(ST.formatCents(planned.cents, "plain")) + ' <span class="tag">plan' +
+        (planned.equityPercent ? " · " + planned.equityPercent + " of saved account" : "") +
+        (planned.skipped ? " · " + planned.skipped + " skipped" : "") + "</span></div></div>";
+    const winHtml = !metrics || metrics.winRate == null
+      ? '<div class="stat" id="dashWinRate"><div class="label">Win rate</div><div class="value na">N/A <span class="tag">no closed trades in period</span></div></div>'
+      : '<div class="stat" id="dashWinRate"><div class="label">Win rate</div><div class="value flat">' + ST.escapeHtml(metrics.winRate) + ' <span class="tag">closed trades</span></div></div>';
+    const emptyJournal = !state.data.trades.length;
+    const periodNote = bounds.ready
+      ? bounds.label + (bounds.start ? " · " + bounds.start + " through " + bounds.end : "") + ". " + ST.METRIC_HELP.cumulative
+      : bounds.message;
+    const recentHtml = recent.length
+      ? '<h3 class="section-title">Recent completed trades</h3><ul class="perf-list">' + recent.map(function (result) {
         return "<li><span><strong>" + ST.escapeHtml(result.symbol) + "</strong> " + ST.escapeHtml(result.exitDate || "no exit date") + "</span>" + moneyHtml(result.netCents) + "</li>";
       }).join("") + "</ul>"
-      : '<p class="empty">No closed trades yet. Open positions stay off realized profit and loss until you record an exit.</p>';
-    const books = ST.portfolioSnapshot(state.data);
-    const unrealized = books.unrealizedCents == null
-      ? '<div class="stat" id="dashUnrealized"><div class="label">Unrealized P/L</div><div class="value na">N/A <span class="tag">no manual mark</span></div></div>'
-      : stat("Unrealized P/L, manual marks", books.unrealizedCents, "id=\"dashUnrealized\"");
+      : '<h3 class="section-title">Recent completed trades</h3><p class="empty">No completed trades in this period. Open positions stay off realized profit and loss until you record an exit.</p>';
+    const openHtml = openTrades.length
+      ? '<h3 class="section-title">Open positions</h3><ul class="perf-list">' + openTrades.slice(0, 6).map(function (trade) {
+        const row = ST.positionAccounting(trade);
+        return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(trade.direction === "short" ? "Short" : "Long") +
+          "</span><span>" + ST.escapeHtml(row.remainingQty == null ? "quantity N/A" : ST.formatShares(row.remainingQty) + " left") + "</span></li>";
+      }).join("") + "</ul>"
+      : '<h3 class="section-title">Open positions</h3><p class="empty">No open positions. A closed trade is realized only from the exit you recorded.</p>';
     document.getElementById("dashboardBody").innerHTML =
+      (emptyJournal ? '<p class="empty">No trades recorded yet. Log a trade to see realized results. This dashboard does not invent sample performance.</p>' : "") +
       '<div class="stats">' +
+        stat("Realized P/L", metrics ? metrics.realizedNetCents : null, "id=\"dashRealized\"") +
+        '<div class="stat" id="dashOpen"><div class="label">Open positions</div><div class="value flat">' + openTrades.length + ' <span class="tag">not realized</span></div></div>' +
+        plannedHtml +
+        winHtml +
+        unrealized +
         '<div class="stat" id="dashPortfolio"><div class="label">Portfolio market value</div><div class="value na">N/A <span class="tag">not inferred</span></div></div>' +
         '<div class="stat" id="dashCash"><div class="label">Cash balance</div><div class="value na">N/A <span class="tag">not tracked</span></div></div>' +
-        unrealized +
-        '<div class="stat" id="dashCost"><div class="label">Recorded cost of open longs</div><div class="value flat">' +
-          (books.recordedLongCostCents == null ? 'N/A <span class="tag">no open long shares</span>' : ST.escapeHtml(ST.formatCents(books.recordedLongCostCents)) + ' <span class="tag">not market value</span>') +
-        "</div></div>" +
-        stat("Year to date, closed trades", ytdMetrics.realizedNetCents, "id=\"dashYtd\"") +
-        stat("All dated closes", all.realizedNetCents, "id=\"dashRealized\"") +
-        '<div class="stat" id="dashOpen"><div class="label">Open trades</div><div class="value flat">' + openCount + ' <span class="tag">not realized</span></div></div>' +
         stat("Today, closed trades", today.tradeCents, "id=\"dashTodayTrades\"") +
         stat("Today, manual entry", today.manualCents, "id=\"dashTodayManual\"") +
-        '<div class="stat record"><div class="label">Best and worst dated day, year to date</div><div class="extremes">' +
-          extreme("Best", ytdMetrics.bestDay) + extreme("Worst", ytdMetrics.worstDay) +
-        "</div></div></div>" +
-      '<h3 class="section-title">Recorded performance</h3><p class="hint">' + ST.escapeHtml(ST.METRIC_HELP.cumulative) + "</p>" +
-      curveSvg(all.curve) + recentHtml;
+      "</div>" +
+      '<div class="chart-block"><h3>Realized P/L over time</h3><p class="hint">' + ST.escapeHtml(periodNote) + "</p>" +
+        curveSvg(metrics ? metrics.curve : []) +
+        '<h3 class="section-title">Daily realized P/L</h3>' + barSvg(metrics ? metrics.curve.map(function (point) { return { label: point.date, cents: point.dayCents }; }) : [], "Daily realized profit and loss") +
+        '<h3 class="section-title">By month</h3>' + barSvg(monthPoints(metrics ? metrics.curve : []), "Monthly realized profit and loss") +
+        '<h3 class="section-title">By ticker</h3>' + barSvg((metrics ? metrics.byTicker : []).map(function (row) { return { label: row.label, cents: row.netCents }; }), "Realized profit and loss by ticker") +
+      "</div>" +
+      recentHtml + openHtml;
     drawSymbolDetail();
     drawWatchlist();
   }
@@ -328,13 +391,20 @@
     setIfIdle("positionSymbol", state.positionSymbol || "");
     setIfIdle("positionFrom", state.positionFrom || "");
     setIfIdle("positionTo", state.positionTo || "");
+    setIfIdle("positionStrategy", state.positionStrategy || "");
+    const directionEl = document.getElementById("positionDirection");
+    if (document.activeElement !== directionEl) directionEl.value = state.positionDirection || "all";
     const filter = state.positionFilter || "all";
     const symbol = String(state.positionSymbol || "").trim().replace(/^\$/, "").toUpperCase();
+    const direction = state.positionDirection || "all";
+    const strategy = String(state.positionStrategy || "").trim().toLowerCase();
     const from = state.positionFrom || "";
     const to = state.positionTo || "";
     const trades = state.data.trades.filter(function (trade) {
       if (filter !== "all" && trade.status !== filter) return false;
       if (symbol && trade.symbol !== symbol) return false;
+      if (direction !== "all" && trade.direction !== direction) return false;
+      if (strategy && String(trade.strategy || "").toLowerCase().indexOf(strategy) === -1) return false;
       if ((from || to) && !tradeInDateRange(trade, from, to)) return false;
       return true;
     });
@@ -469,6 +539,7 @@
     body.push(metricText("Win rate", metrics.winRate, ST.METRIC_HELP.winRate));
     body.push(metric("Average winning trade", metrics.avgWinCents, ST.METRIC_HELP.avgWin));
     body.push(metric("Average losing trade", metrics.avgLossCents, ST.METRIC_HELP.avgLoss));
+    body.push(metric("Average P/L per closed trade", metrics.avgTradeCents, ST.METRIC_HELP.avgTrade));
     body.push(metric("Gross profit", metrics.grossProfitCents, ST.METRIC_HELP.grossProfit));
     body.push(metricMagnitude("Gross loss", metrics.grossLossCents, ST.METRIC_HELP.grossLoss, "sum of losses"));
     body.push(metricText("Profit factor", metrics.profitFactor, ST.METRIC_HELP.profitFactor));
@@ -479,7 +550,10 @@
     body.push(metricMagnitude("Max drawdown", metrics.maxDrawdownCents, ST.METRIC_HELP.maxDrawdown, "below peak"));
     body.push(groupHtml("By ticker", metrics.byTicker, ST.METRIC_HELP.byTicker));
     body.push(groupHtml("By strategy", metrics.byStrategy, ST.METRIC_HELP.byStrategy));
+    body.push(groupHtml("By direction", metrics.byDirection, ST.METRIC_HELP.byDirection));
     body.push('<div class="metric wide"><h3>Cumulative closed-trade P/L</h3><p class="def">' + ST.escapeHtml(ST.METRIC_HELP.cumulative) + "</p>" + curveSvg(metrics.curve) + "</div>");
+    body.push('<div class="metric wide"><h3>Daily realized P/L</h3><p class="def">Each bar is that exit date’s net. Manual days and account adjustments are not included.</p>' + barSvg(metrics.curve.map(function (point) { return { label: point.date, cents: point.dayCents }; }), "Daily realized profit and loss") + "</div>");
+    body.push('<div class="metric wide"><h3>By month</h3><p class="def">Closed-trade net grouped by exit month. This is not cash flow.</p>' + barSvg(monthPoints(metrics.curve), "Monthly realized profit and loss") + "</div>");
     body.push("</div>");
     const notes = [];
     if (metrics.excludedOpen) notes.push(metrics.excludedOpen + " open " + (metrics.excludedOpen === 1 ? "trade is" : "trades are") + " excluded.");
@@ -492,7 +566,7 @@
   }
 
   function fillRiskDefaults() {
-    const view = document.getElementById("view-settings");
+    const view = document.getElementById("view-risk");
     if (document.activeElement && view.contains(document.activeElement)) return;
     const settings = state.data.settings || {};
     if (settings.accountSize != null && !document.getElementById("riskAccount").value) {
@@ -561,6 +635,51 @@
       return "<li><span><strong>" + ST.escapeHtml(row.label) + "</strong> <span class=\"tag\">" + row.trades + " " + (row.trades === 1 ? "trade" : "trades") + "</span></span>" + moneyHtml(row.netCents) + "</li>";
     }).join("");
     return '<div class="metric wide"><h3>' + ST.escapeHtml(title) + '</h3><p class="def">' + ST.escapeHtml(help) + '</p><ul class="perf-list">' + items + "</ul></div>";
+  }
+
+  function monthPoints(curve) {
+    const map = new Map();
+    (curve || []).forEach(function (point) {
+      const key = String(point.date || "").slice(0, 7);
+      if (!key) return;
+      map.set(key, (map.get(key) || 0n) + point.dayCents);
+    });
+    return Array.from(map.keys()).sort().map(function (key) {
+      return { label: key, cents: map.get(key) };
+    });
+  }
+
+  function barSvg(points, title) {
+    const rows = (points || []).filter(function (point) { return typeof point.cents === "bigint"; });
+    if (!rows.length) {
+      return '<p class="def">N/A — not enough dated closed trades to draw this chart. Totals above are recorded results, not account equity.</p>';
+    }
+    const width = 640;
+    const height = 148;
+    const pad = 8;
+    let min = 0;
+    let max = 0;
+    rows.forEach(function (point) {
+      const value = Number(point.cents);
+      if (value < min) min = value;
+      if (value > max) max = value;
+    });
+    const span = (max - min) || 1;
+    const gap = 3;
+    const barWidth = Math.max(2, ((width - pad * 2) - gap * (rows.length - 1)) / rows.length);
+    const zeroY = pad + ((max - 0) * (height - pad * 2)) / span;
+    const rects = rows.map(function (point, index) {
+      const value = Number(point.cents);
+      const yValue = pad + ((max - value) * (height - pad * 2)) / span;
+      const top = Math.min(yValue, zeroY);
+      const barHeight = Math.max(1, Math.abs(zeroY - yValue));
+      const x = pad + index * (barWidth + gap);
+      const cls = value > 0 ? "up" : value < 0 ? "down" : "flatbar";
+      return '<rect class="' + cls + '" x="' + x.toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + barHeight.toFixed(1) + '"><title>' +
+        ST.escapeHtml(point.label + " " + ST.formatCents(point.cents)) + "</title></rect>";
+    }).join("");
+    const label = title + " from " + rows[0].label + " to " + rows[rows.length - 1].label + ". Realized closed-trade results only. Not account equity.";
+    return '<svg class="bars" viewBox="0 0 ' + width + " " + height + '" role="img" aria-label="' + ST.escapeHtml(label) + '"><line class="zero" x1="' + pad + '" y1="' + zeroY.toFixed(1) + '" x2="' + (width - pad) + '" y2="' + zeroY.toFixed(1) + '"></line>' + rects + "</svg>";
   }
 
   function curveSvg(curve) {
@@ -637,7 +756,7 @@
     const rows = detail.trades.map(function (result) {
       return "<li><span><strong>" + ST.escapeHtml(result.symbol) + "</strong> " + ST.escapeHtml(result.direction) + "</span>" + moneyHtml(result.netCents) + "</li>";
     }).join("");
-    return "<h3>Closed trades</h3><ul class=\"perf-list\">" + rows + "</ul><p>Total " + ST.escapeHtml(ST.formatCents(detail.tradeCents)) + " " + ST.pnlWord(detail.tradeCents) + ". Edit a trade from Positions. This total is not added to the manual entry.</p>";
+    return "<h3>Closed trades</h3><ul class=\"perf-list\">" + rows + "</ul><p>Total " + ST.escapeHtml(ST.formatCents(detail.tradeCents)) + " " + ST.pnlWord(detail.tradeCents) + ". Edit a trade from Trades. This total is not added to the manual entry.</p>";
   }
 
   function updateTradeChrome() {
@@ -868,6 +987,7 @@
       entryPrice: document.getElementById("riskEntry").value,
       stopPrice: document.getElementById("riskStop").value,
       direction: document.getElementById("riskDirection").value,
+      targetPrice: document.getElementById("riskTarget").value,
       remember: document.getElementById("riskRemember").checked
     };
   }
@@ -936,6 +1056,8 @@
     return {
       filter: valueOf("positionFilter"),
       symbol: valueOf("positionSymbol"),
+      direction: valueOf("positionDirection"),
+      strategy: valueOf("positionStrategy"),
       from: valueOf("positionFrom"),
       to: valueOf("positionTo")
     };
@@ -1100,7 +1222,7 @@
   }
 
   function syncWidgets(current) {
-    if (!current || current.tab !== "dashboard" || !ST.mountChart) return;
+    if (!current || current.tab !== "markets" || !ST.mountChart) return;
     const settings = current.data.settings || {};
     const fallback = current.data.trades.find(function (trade) { return trade.symbol; });
     const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";

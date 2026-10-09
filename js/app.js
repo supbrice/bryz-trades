@@ -10,8 +10,13 @@
     tab: "dashboard",
     positionFilter: "all",
     positionSymbol: "",
+    positionDirection: "all",
+    positionStrategy: "",
     positionFrom: "",
     positionTo: "",
+    overviewPreset: "ytd",
+    overviewFrom: "",
+    overviewTo: "",
     analyticsSymbol: "",
     analyticsStatus: "all",
     rangePreset: "ytd",
@@ -60,14 +65,23 @@
     },
     setFilter: function (filter) {
       if (filter && typeof filter === "object") {
-        state.positionFilter = filter.filter || "all";
-        state.positionSymbol = filter.symbol || "";
-        state.positionFrom = filter.from || "";
-        state.positionTo = filter.to || "";
+        if (filter.filter != null) state.positionFilter = filter.filter || "all";
+        if (filter.symbol != null) state.positionSymbol = filter.symbol || "";
+        if (filter.direction != null) state.positionDirection = filter.direction || "all";
+        if (filter.strategy != null) state.positionStrategy = filter.strategy || "";
+        if (filter.from != null) state.positionFrom = filter.from || "";
+        if (filter.to != null) state.positionTo = filter.to || "";
       } else {
         state.positionFilter = filter;
       }
       state.tab = "positions";
+      refresh();
+    },
+    setOverview: function (range) {
+      if (range.preset) state.overviewPreset = range.preset;
+      if (range.from != null) state.overviewFrom = range.from;
+      if (range.to != null) state.overviewTo = range.to;
+      state.tab = "dashboard";
       refresh();
     },
     setAnalytics: function (query) {
@@ -87,7 +101,7 @@
         selectedSymbol: symbol,
         selectedExchange: exchange
       });
-      state.tab = "dashboard";
+      state.tab = "markets";
       persist();
       refresh();
     },
@@ -95,7 +109,7 @@
       const allowed = { "1D": true, "5D": true, "1M": true, "6M": true, YTD: true, "1Y": true, "5Y": true, MAX: true };
       if (!allowed[period]) return;
       state.data.settings = Object.assign({}, state.data.settings, { chartPeriod: period });
-      state.tab = "dashboard";
+      state.tab = "markets";
       persist();
       refresh();
     },
@@ -115,7 +129,7 @@
       settings.selectedSymbol = symbol;
       settings.selectedExchange = exchange;
       state.data.settings = settings;
-      state.tab = "dashboard";
+      state.tab = "markets";
       persist();
       refresh();
     },
@@ -255,16 +269,26 @@
         box.innerHTML = '<p class="form-error">' + ST.escapeHtml(result.error) + "</p>";
         return;
       }
+      let reward = "";
+      if (result.rewardCents != null) {
+        reward = "<p>Potential reward " + ST.escapeHtml(ST.formatCents(result.rewardCents)) +
+          ". Reward per share " + ST.escapeHtml(ST.formatCents(result.rewardPerShareCents)) +
+          ". Reward to risk " + ST.escapeHtml(result.rewardToRisk || "N/A") + ".</p>";
+      } else if (result.rewardNote) {
+        reward = "<p>" + ST.escapeHtml(result.rewardNote) + "</p>";
+      }
       box.innerHTML = "<h3>Estimated size</h3><p>Planned risk " + ST.escapeHtml(ST.formatCents(result.plannedRiskCents)) +
+        (result.equityPercent ? " (" + ST.escapeHtml(result.equityPercent) + " of the account size you entered)" : "") +
         ". Risk per share " + ST.escapeHtml(ST.formatCents(result.perShareRiskCents)) +
-        ". Quantity " + ST.escapeHtml(result.quantityText) + " shares.</p><p>" + ST.escapeHtml(result.disclaimer) + "</p>";
+        ". Quantity " + ST.escapeHtml(result.quantityText) + " shares.</p>" + reward +
+        "<p>" + ST.escapeHtml(result.disclaimer) + "</p>";
       if (input.remember) {
         const account = ST.moneyNumber(input.accountSize);
         const percent = ST.scaledToNumber(ST.parseScaledDigits(input.riskPercent, 2), 2);
-        state.data.settings = {
+        state.data.settings = Object.assign({}, state.data.settings, {
           accountSize: account,
           riskPercent: percent
-        };
+        });
         persist();
       }
     }

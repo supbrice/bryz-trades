@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#070b12" />
+  <meta name="theme-color" content="#090B0A" />
   <script>
     (function () {
       var key = "stock-tracker-theme";
@@ -15,7 +15,7 @@
       } catch (e) {}
       document.documentElement.setAttribute("data-theme", theme);
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", theme === "light" ? "#f4f7fb" : "#070b12");
+      if (meta) meta.setAttribute("content", theme === "light" ? "#F3F6F3" : "#090B0A");
     })();
   </script>
   <meta name="description" content="Ladder — a local trading journal. Not financial advice." />
@@ -38,7 +38,7 @@
           </svg>
           <h1>Ladder</h1>
         </div>
-        <p class="sub">A local trading journal for any ticker. <strong>Not financial advice.</strong> Does not place trades. A chart, when it loads, is not written into your trades.</p>
+        <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
       </div>
       <div class="header-actions">
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
@@ -58,23 +58,54 @@
 
     <div class="shell">
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Dashboard</button>
-        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Positions</button>
-        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
+        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Overview</button>
+        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets">Markets</button>
+        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Trades</button>
+        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk">Risk</button>
         <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics">Analytics</button>
+        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
         <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
       </nav>
 
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Overview</h2>
+              <button type="button" id="dashAddTrade" class="primary">Log trade</button>
+            </div>
+            <div class="range-bar">
+              <label>Period
+                <select id="overviewPreset">
+                  <option value="ytd">Year to date</option>
+                  <option value="month">This month</option>
+                  <option value="all">All dated closes</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>From
+                <input id="overviewFrom" type="date" />
+              </label>
+              <label>To
+                <input id="overviewTo" type="date" />
+              </label>
+            </div>
+            <p class="hint">Realized figures use recorded exits and fees. Unrealized figures are an estimate from a price you type, or N/A when that price is missing. Planned risk uses the stop you wrote down. It is not a live stop, and it is not a claim the market hit it.</p>
+            <div id="dashboardBody"></div>
+            <div class="button-row shortcuts">
+              <button type="button" id="dashPositions">Open positions</button>
+              <button type="button" id="gotoAnalytics">Analytics</button>
+              <button type="button" id="gotoCalendar">Calendar</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-markets" class="view" role="tabpanel" aria-labelledby="tab-markets" hidden>
           <div class="panel chart-panel">
             <div class="panel-head">
-              <h2>Chart</h2>
-              <div class="button-row tight">
-                <button type="button" id="dashAddTrade" class="primary">Add trade</button>
-                <button type="button" id="dashPositions">Review positions</button>
-              </div>
+              <h2>Markets</h2>
             </div>
+            <p class="hint">The chart is display-only. Its prices are not written into trades, marks, or profit and loss.</p>
             <form id="symbolForm" class="symbol-bar">
               <label>Symbol
                 <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
@@ -115,22 +146,15 @@
             <div id="watchlistBody"></div>
             <div id="tapeMount" class="tape-mount" role="region" aria-label="Watchlist prices"></div>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Journal</h2>
-            </div>
-            <p class="hint">Realized figures use recorded exits only. Unrealized figures need a mark you type. This is not account equity, cash, or a live portfolio value.</p>
-            <div id="dashboardBody"></div>
-          </div>
         </section>
 
         <section id="view-positions" class="view" role="tabpanel" aria-labelledby="tab-positions" hidden>
           <div class="panel">
             <div class="panel-head">
-              <h2>Positions</h2>
-              <button type="button" id="addTradeBtn" class="primary">Add trade</button>
+              <h2>Trades</h2>
+              <button type="button" id="addTradeBtn" class="primary">Log trade</button>
             </div>
-            <p class="hint">Each card is a trade you recorded. A target or hard stop is a plan, not an exit.</p>
+            <p class="hint">Each card is a trade you recorded. A target or hard stop is a plan, not an exit. Open covers a planned position that is not realized.</p>
             <details class="legend">
               <summary>What the statuses mean</summary>
               <ul>
@@ -150,6 +174,16 @@
               </label>
               <label>Symbol
                 <input id="positionSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
+              </label>
+              <label class="inline-field">Direction
+                <select id="positionDirection">
+                  <option value="all">Any direction</option>
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </label>
+              <label>Strategy
+                <input id="positionStrategy" maxlength="40" autocomplete="off" placeholder="Any" />
               </label>
               <label>From
                 <input id="positionFrom" type="date" />
@@ -218,6 +252,47 @@
           </div>
         </section>
 
+        <section id="view-risk" class="view" role="tabpanel" aria-labelledby="tab-risk" hidden>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Risk</h2>
+            </div>
+            <p class="hint" id="riskDisclaimer">Planning math from the numbers you type. It is not financial advice and does not place an order. A stop does not guarantee the maximum loss. Actual losses can exceed the planned risk because of gaps, slippage, fees, and execution. This calculator does not change a risk limit unless you check remember.</p>
+            <div class="row-2">
+              <label>Account size ($)
+                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
+              </label>
+              <label>Risk percent
+                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Entry price ($)
+                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
+              </label>
+              <label>Stop price ($)
+                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
+              </label>
+            </div>
+            <div class="row-2">
+              <label>Direction
+                <select id="riskDirection">
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </label>
+              <label>Planned target ($)
+                <input id="riskTarget" inputmode="decimal" autocomplete="off" placeholder="Optional" />
+              </label>
+            </div>
+            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
+            <div class="button-row">
+              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
+            </div>
+            <div id="riskResult" class="result-box" role="status"></div>
+          </div>
+        </section>
+
         <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings" hidden>
           <div class="panel">
             <div class="panel-head">
@@ -236,35 +311,6 @@
               <button type="button" id="importBtn">Choose JSON file</button>
               <input type="file" id="importFile" accept="application/json,.json" hidden />
             </div>
-            <h3 class="section-title">Risk calculator</h3>
-            <p class="hint" id="riskDisclaimer">Optional planning math from the numbers you type. It is not financial advice and does not place an order. Actual losses can exceed the planned risk because of gaps, slippage, fees, and execution.</p>
-            <div class="row-2">
-              <label>Account size ($)
-                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
-              </label>
-              <label>Risk percent
-                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
-              </label>
-            </div>
-            <div class="row-2">
-              <label>Entry price ($)
-                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
-              </label>
-              <label>Stop price ($)
-                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
-              </label>
-            </div>
-            <label>Direction
-              <select id="riskDirection">
-                <option value="long">Long</option>
-                <option value="short">Short</option>
-              </select>
-            </label>
-            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
-            <div class="button-row">
-              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
-            </div>
-            <div id="riskResult" class="result-box" role="status"></div>
             <h3 class="section-title">How saving works</h3>
             <div id="storageHelp" class="prose">
               <p>The journal is stored in this browser’s local storage on this device. It is not an account, and it is not sent to a server.</p>

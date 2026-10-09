@@ -276,6 +276,54 @@ test("risk calculator sizes a long and a short and refuses a stop on the wrong s
   assert.equal(calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: 50, stopPrice: 45, direction: "short" }).ok, false);
   assert.equal(calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: 50, stopPrice: 50, direction: "long" }).ok, false);
   assert.equal(calc.positionRisk({ accountSize: 0, riskPercent: 1, entryPrice: 50, stopPrice: 48, direction: "long" }).ok, false);
+  const reward = calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: 50, stopPrice: 48, targetPrice: 54, direction: "long" });
+  assert.equal(reward.ok, true);
+  assert.equal(reward.quantityText, "50");
+  assert.equal(reward.rewardCents, 20000n);
+  assert.equal(reward.rewardToRisk, "2.00");
+  assert.equal(reward.equityPercent, "1.00%");
+  const missingTarget = calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: 50, stopPrice: 48, direction: "long" });
+  assert.equal(missingTarget.ok, true);
+  assert.equal(missingTarget.rewardCents, null);
+  const badTarget = calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: 50, stopPrice: 48, targetPrice: 49, direction: "long" });
+  assert.equal(badTarget.ok, true);
+  assert.equal(badTarget.quantityText, "50");
+  assert.equal(badTarget.rewardCents, null);
+  assert.match(badTarget.rewardNote, /above the entry/);
+  assert.equal(calc.positionRisk({ accountSize: "nope", riskPercent: 1, entryPrice: 50, stopPrice: 48, direction: "long" }).ok, false);
+  assert.equal(calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: "", stopPrice: 48, direction: "long" }).ok, false);
+});
+
+test("hand-calculated realized results, direction split, and planned open risk", () => {
+  const journal = {
+    settings: { accountSize: 10000 },
+    trades: [
+      closed({ id: "l", symbol: "AAA", quantity: 10, entryPrice: 100, exitPrice: 112, fees: 2, exitDate: "2026-03-02", strategy: "breakout" }),
+      closed({ id: "s", symbol: "BBB", direction: "short", quantity: 5, entryPrice: 50, exitPrice: 40, fees: 0, exitDate: "2026-03-03", strategy: "fade" }),
+      { id: "o", symbol: "CCC", direction: "long", status: "open", quantity: 10, entryPrice: 100, hardStop: 95, fees: 0, exitDate: "", exitPrice: null },
+      { id: "skip", symbol: "DDD", direction: "long", status: "open", quantity: 4, entryPrice: 20, hardStop: null, fees: 0 }
+    ],
+    days: { "2026-03-02": { entryType: "manual", manualPnl: 500, adjustment: 1000, note: "not trading p/l" } }
+  };
+  const metrics = calc.analyze(journal);
+  assert.equal(metrics.realizedNetCents, 16800n);
+  assert.equal(metrics.tradeCount, 2);
+  assert.equal(metrics.wins, 2);
+  assert.equal(metrics.winRate, "100.0%");
+  assert.equal(metrics.avgTradeCents, 8400n);
+  assert.equal(metrics.byDirection.find((row) => row.label === "Long").netCents, 11800n);
+  assert.equal(metrics.byDirection.find((row) => row.label === "Short").netCents, 5000n);
+  assert.equal(metrics.byTicker.find((row) => row.label === "AAA").netCents, 11800n);
+  const march = metrics.curve.reduce((sum, point) => sum + point.dayCents, 0n);
+  assert.equal(march, 16800n);
+  const planned = calc.plannedOpenRisk(journal);
+  assert.equal(planned.cents, 5000n);
+  assert.equal(planned.included, 1);
+  assert.equal(planned.skipped, 1);
+  assert.equal(planned.equityPercent, "0.50%");
+  const onlySkip = calc.plannedOpenRisk({ trades: [journal.trades[3]] });
+  assert.equal(onlySkip.cents, null);
+  assert.equal(onlySkip.included, 0);
 });
 
 test("a thousand closed trades sum without dropping cents", () => {

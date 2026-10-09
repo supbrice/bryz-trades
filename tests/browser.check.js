@@ -9,10 +9,12 @@ const root = path.resolve(__dirname, "..");
 const shotDir = "/opt/cursor/artifacts/screenshots";
 const fullShotDir = path.join(os.tmpdir(), "ladder-browser-shots");
 const views = [
-  ["dashboard", "Dashboard"],
-  ["positions", "Positions"],
-  ["calendar", "Calendar"],
+  ["dashboard", "Overview"],
+  ["markets", "Markets"],
+  ["positions", "Trades"],
+  ["risk", "Risk"],
   ["analytics", "Analytics"],
+  ["calendar", "Calendar"],
   ["settings", "Settings"]
 ];
 
@@ -29,7 +31,11 @@ function ymd(date) {
 function serve() {
   const server = http.createServer(function (req, res) {
     const urlPath = decodeURIComponent(req.url.split("?")[0]);
-    const rel = urlPath === "/" ? "/index.html" : urlPath;
+    const prefix = "/sofi-levels-card";
+    let stripped = urlPath;
+    if (stripped === prefix || stripped === prefix + "/") stripped = "/";
+    else if (stripped.startsWith(prefix + "/")) stripped = stripped.slice(prefix.length);
+    const rel = stripped === "/" ? "/index.html" : stripped;
     const file = path.normalize(path.join(root, rel));
     if (!file.startsWith(root)) {
       res.writeHead(403);
@@ -199,6 +205,12 @@ async function openPage(browser, url, viewport, theme, journal) {
     if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
     errors.push(message);
   });
+  page.on("console", function (msg) {
+    if (msg.type() !== "error") return;
+    const text = msg.text();
+    if (/tradingview|sandboxed|net::ERR|Failed to load resource/i.test(text)) return;
+    errors.push("console: " + text);
+  });
   await page.goto(url, { waitUntil: "load" });
   await page.waitForSelector("h1");
   if (errors.length) throw new Error(errors.join("\n"));
@@ -271,12 +283,14 @@ async function main() {
   try {
     await runFlow(browser, url, today, { width: 390, height: 844 }, "phone");
     await runFlow(browser, url, today, { width: 768, height: 1024 }, "tablet");
-    await runFlow(browser, url, today, { width: 1280, height: 900 }, "desktop");
+    await runFlow(browser, url, today, { width: 1440, height: 900 }, "desktop");
     await runMigration(browser, url);
     await runImports(browser, url, today);
     await runLarge(browser, url, today);
     await runUniversal(browser, url, today);
     await runChart(browser, url);
+    await runPreserve(browser, url);
+    await runPagesBase(browser, url);
     await runShots(browser, url, demoJournal(now));
     console.log("browser checks passed");
   } finally {
@@ -292,7 +306,7 @@ async function runFlow(browser, url, today, viewport, label) {
   page.on("dialog", function (dialog) { dialog.accept(); });
   try {
     assert((await page.locator("h1").innerText()) === "Ladder", "title");
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "SOFI");
     await shows(page, "#positionsList", "Open — not realized");
     await page.locator("#addTradeBtn").click();
@@ -304,7 +318,7 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.locator("#fieldExit").fill("12");
     await page.locator("#fieldExitDate").fill(today);
     await page.locator("#tradeSaveBtn").click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$9.00");
     await shows(page, "#dashTodayTrades", "+$9.00");
 
@@ -312,19 +326,19 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.locator("#logTodayBtn").click();
     await page.locator("#dayAmount").fill("25");
     await page.getByRole("button", { name: "Save day" }).click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashTodayTrades", "+$9.00");
     await shows(page, "#dashTodayManual", "+$25.00");
 
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     const testCard = page.locator(".stock-card", { has: page.getByRole("heading", { name: /^TEST/ }) });
     await testCard.getByRole("button", { name: "Edit" }).click();
     await page.locator("#fieldExit").fill("11");
     await page.getByRole("button", { name: "Save changes" }).click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$4.00");
 
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     await page.locator("#addTradeBtn").click();
     await page.locator("#fieldSymbol").fill("BIG");
     await page.locator("#fieldStatus").selectOption("open");
@@ -333,7 +347,7 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.locator("#fieldExit").fill("100");
     await page.locator("#fieldExitDate").fill(today);
     await page.locator("#tradeSaveBtn").click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$4.00");
     const openText = await page.locator("#dashOpen").innerText();
     assert(openText.includes("2") || openText.includes("3"), "open count should include BIG and SOFI, was " + openText);
@@ -343,13 +357,13 @@ async function runFlow(browser, url, today, viewport, label) {
     await shows(page, "#analyticsBody", "not account equity");
     await shows(page, "#metric-realized", "+$4.00");
 
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^TEST/ }) }).getByRole("button", { name: "Delete" }).click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "N/A");
     await shows(page, "#dashTodayManual", "+$25.00");
 
-    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Risk" }).click();
     await page.locator("#riskAccount").fill("10000");
     await page.locator("#riskPercent").fill("1");
     await page.locator("#riskEntry").fill("50");
@@ -375,6 +389,21 @@ async function runFlow(browser, url, today, viewport, label) {
     await assertThemeIcon(page, "dark");
     await page.locator("#themeToggle").click();
     assert((await page.locator("html").getAttribute("data-theme")) === "light", label + " click to light");
+    await page.locator("#tab-dashboard").focus();
+    await page.keyboard.press("Tab");
+    const focused = await page.evaluate(function () { return document.activeElement && document.activeElement.id; });
+    assert(focused === "tab-markets", label + " tab order " + focused);
+    await page.keyboard.press("Enter");
+    assert(await page.locator("#view-markets").isVisible(), label + " enter opens markets");
+    const assets = await page.evaluate(function () {
+      return Array.from(document.querySelectorAll("link[rel='stylesheet'], script[src]")).map(function (node) {
+        return node.getAttribute("href") || node.getAttribute("src") || "";
+      });
+    });
+    assert(assets.indexOf("css/styles.css") !== -1, "stylesheet path");
+    assets.forEach(function (src) {
+      assert(src && src.charAt(0) !== "/" && src.indexOf("http") !== 0, "asset stays relative " + src);
+    });
     for (const view of views) {
       await page.getByRole("tab", { name: view[1] }).click();
       await noOverflow(page, label + " " + view[0] + " light");
@@ -404,7 +433,7 @@ async function runMigration(browser, url) {
     errors.push(message);
   });
   await page.goto(url, { waitUntil: "load" });
-  await page.getByRole("tab", { name: "Positions" }).click();
+  await page.getByRole("tab", { name: "Trades" }).click();
   await shows(page, "#positionsList", "Open — not realized");
   await shows(page, "#positionsList", "Pasted close is under the hard stop");
   const stored = await page.evaluate(function () {
@@ -421,7 +450,7 @@ async function runMigration(browser, url) {
   assert(stored.v3.trades[0].exitPrice == null, "pasted close is not an exit");
   assert(stored.v3.days["2026-01-05"].entryType === "manual", "manual label");
   assert(stored.v3.days["2026-01-05"].manualPnl === 25.5, "manual amount");
-  await page.getByRole("tab", { name: "Dashboard" }).click();
+  await page.getByRole("tab", { name: "Overview" }).click();
   await shows(page, "#dashRealized", "N/A");
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();
@@ -477,7 +506,7 @@ async function runImports(browser, url, today) {
       const banner = document.getElementById("banner");
       return banner && !banner.hidden && banner.textContent.includes("JSON");
     });
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$9.00");
     await shows(page, "#dashTodayManual", "+$25.00");
 
@@ -486,13 +515,13 @@ async function runImports(browser, url, today) {
       const banner = document.getElementById("banner");
       return banner && !banner.hidden && banner.textContent.includes("schema version 4");
     });
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$9.00");
 
     await choose(dupPath);
     await page.waitForSelector("#importDialog[open]");
     await page.getByRole("button", { name: "Merge into this journal" }).click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$9.00");
     const count = await page.evaluate(function () { return JSON.parse(localStorage.getItem("ladder-journal-v3")).trades.length; });
     assert(count === 1, "duplicate id was counted twice: " + count);
@@ -500,7 +529,7 @@ async function runImports(browser, url, today) {
     await choose(simPath);
     await page.waitForSelector("#importDialog[open]");
     await page.getByRole("button", { name: "Merge into this journal" }).click();
-    await page.getByRole("tab", { name: "Dashboard" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$9.00");
     const backup = await page.evaluate(function () { return localStorage.getItem("ladder-journal-preimport"); });
     assert(backup && backup.includes("before-import"), "pre-import backup");
@@ -530,7 +559,7 @@ async function runLarge(browser, url, today) {
   const page = opened.page;
   try {
     await shows(page, "#dashRealized", "+$3.00");
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     const cards = await page.locator(".stock-card").count();
     assert(cards === 300, "expected 300 cards, saw " + cards);
     await page.getByRole("tab", { name: "Analytics" }).click();
@@ -563,7 +592,7 @@ async function runUniversal(browser, url, today) {
     assert(stored.backup && stored.backup.includes("before-schema-v3-migration"), "v3 premigration backup");
     assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SOFI" && trade.status === "open"; }), "SOFI survived");
 
-    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.getByRole("tab", { name: "Trades" }).click();
     await page.locator("#addTradeBtn").click();
     await page.locator("#fieldSymbol").fill("MSFT");
     await page.locator("#fieldExchange").fill("NASDAQ");
@@ -631,6 +660,7 @@ async function runChart(browser, url) {
   const page = opened.page;
   page.setDefaultTimeout(15000);
   try {
+    await page.getByRole("tab", { name: "Markets" }).click();
     await page.waitForSelector("#chartMount[data-widget-config]");
     let config = await readChartConfig(page);
     assert(config.symbol === "NASDAQ:SOFI", "default chart symbol " + config.symbol);
@@ -677,7 +707,7 @@ async function runChart(browser, url) {
     await opened.context.close();
   }
 
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(function () {
     localStorage.clear();
     localStorage.setItem("stock-tracker-theme", "dark");
@@ -693,6 +723,7 @@ async function runChart(browser, url) {
   });
   try {
     await blocked.goto(url, { waitUntil: "load" });
+    await blocked.getByRole("tab", { name: "Markets" }).click();
     await blocked.waitForSelector("#chartMount .chart-fallback", { timeout: 12000 });
     const fallback = await blocked.locator("#chartMount").innerText();
     assert(fallback.includes("Chart unavailable"), fallback);
@@ -712,50 +743,148 @@ async function runChart(browser, url) {
   }
 }
 
+async function runPreserve(browser, url) {
+  const v3 = JSON.stringify({
+    schemaVersion: 3,
+    app: "ladder",
+    settings: { accountSize: 25000, riskPercent: 1, selectedSymbol: "IBM", selectedExchange: "NYSE", chartPeriod: "6M", watchlist: [{ symbol: "AAPL", exchange: "NASDAQ" }] },
+    trades: [{
+      id: "keep-me",
+      symbol: "IBM",
+      name: "International Business Machines",
+      direction: "long",
+      status: "closed",
+      quantity: 2,
+      entryPrice: 10,
+      exitPrice: 12,
+      fees: 0,
+      entryDate: "2026-02-01",
+      exitDate: "2026-02-02",
+      strategy: "kept"
+    }],
+    days: { "2026-02-03": { entryType: "manual", manualPnl: 3, note: "kept manual", breakdown: [], adjustment: null, adjustmentNote: "" } }
+  });
+  const v2 = "{\"schemaVersion\":2,\"app\":\"ladder\",\"settings\":{},\"trades\":[{\"id\":\"old-v2\",\"symbol\":\"GE\",\"direction\":\"long\",\"status\":\"open\",\"quantity\":1}],\"days\":{}}";
+  const pre = "{\"reason\":\"before-schema-v2-migration\",\"raw\":\"untouched-v1\"}";
+  const pre3 = "{\"reason\":\"before-schema-v3-migration\",\"raw\":\"untouched-v2\"}";
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await context.addInitScript(function (data) {
+    localStorage.clear();
+    localStorage.setItem("ladder-journal-v3", data.v3);
+    localStorage.setItem("ladder-journal-v2", data.v2);
+    localStorage.setItem("ladder-journal-premigration", data.pre);
+    localStorage.setItem("ladder-journal-premigration-v3", data.pre3);
+    localStorage.setItem("stock-tracker-theme", "light");
+  }, { v3: v3, v2: v2, pre: pre, pre3: pre3 });
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: "load" });
+    await page.getByRole("tab", { name: "Trades" }).click();
+    await shows(page, "#positionsList", "IBM");
+    const stored = await page.evaluate(function () {
+      return {
+        v3: localStorage.getItem("ladder-journal-v3"),
+        v2: localStorage.getItem("ladder-journal-v2"),
+        pre: localStorage.getItem("ladder-journal-premigration"),
+        pre3: localStorage.getItem("ladder-journal-premigration-v3"),
+        theme: localStorage.getItem("stock-tracker-theme")
+      };
+    });
+    assert(stored.v3 === v3, "v3 bytes changed");
+    assert(stored.v2 === v2, "v2 bytes changed");
+    assert(stored.pre === pre, "premigration bytes changed");
+    assert(stored.pre3 === pre3, "premigration v3 bytes changed");
+    assert(stored.theme === "light", "theme key changed");
+    assert((await page.locator("html").getAttribute("data-theme")) === "light", "theme applied");
+    console.log("preservation passed");
+  } finally {
+    await context.close();
+  }
+}
+
+async function runPagesBase(browser, url) {
+  const opened = await openPage(browser, url + "sofi-levels-card/", { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
+  const page = opened.page;
+  try {
+    assert((await page.locator("h1").innerText()) === "Ladder", "pages base title");
+    const sheet = await page.evaluate(function () {
+      const link = document.querySelector("link[rel='stylesheet']");
+      return link ? link.getAttribute("href") : "";
+    });
+    assert(sheet === "css/styles.css", "pages stylesheet " + sheet);
+    await shows(page, "#dashboardBody", "No trades recorded yet");
+    if (page.errors.length) throw new Error(page.errors.join("\n"));
+    console.log("pages base path passed");
+  } finally {
+    await opened.context.close();
+  }
+}
+
+async function shotView(page, file) {
+  await page.screenshot({ path: path.join(shotDir, file), fullPage: true });
+}
+
 async function runShots(browser, url, journal) {
   const sizes = [
     ["phone", { width: 390, height: 844 }],
-    ["desktop", { width: 1280, height: 900 }]
+    ["desktop", { width: 1440, height: 900 }]
+  ];
+  const sections = [
+    ["markets", "Markets", "investor_markets"],
+    ["positions", "Trades", "investor_trades"],
+    ["risk", "Risk", "investor_risk"],
+    ["analytics", "Analytics", "investor_analytics"],
+    ["calendar", "Calendar", "investor_calendar"],
+    ["settings", "Settings", "investor_settings"]
   ];
   for (const size of sizes) {
-    for (const theme of ["dark", "light"]) {
-      const opened = await openPage(browser, url, size[1], theme, journal);
-      const page = opened.page;
-      try {
-        const themeAttr = await page.locator("html").getAttribute("data-theme");
-        assert(themeAttr === theme, "screenshot theme " + theme);
-        await assertThemeIcon(page, theme);
-        await page.getByRole("tab", { name: "Dashboard" }).click();
-        await page.waitForFunction(function () {
-          const el = document.getElementById("chartMount");
-          const widgetState = el && el.getAttribute("data-widget-state");
-          return widgetState === "loaded" || widgetState === "fallback";
-        }, null, { timeout: 12000 });
-        await page.locator("#view-dashboard").screenshot({
-          path: path.join(shotDir, "universal_dashboard_" + size[0] + "_" + theme + ".png")
-        });
-        await page.locator("#symbolDetail").screenshot({
-          path: path.join(shotDir, "universal_symbol_" + size[0] + "_" + theme + ".png")
-        });
-        await page.getByRole("tab", { name: "Positions" }).click();
-        await page.locator("#positionSymbol").fill("AAPL");
-        await page.waitForSelector("#positionsList");
-        await page.locator("#view-positions").screenshot({
-          path: path.join(shotDir, "universal_positions_" + size[0] + "_" + theme + ".png")
-        });
-        await page.locator("#positionSymbol").fill("");
-        for (const view of [["analytics", "Analytics"], ["settings", "Settings"]]) {
-          await page.getByRole("tab", { name: view[1] }).click();
-          await page.waitForSelector("#view-" + view[0] + ":not([hidden])");
-          await noOverflow(page, size[0] + " " + theme + " " + view[0]);
-          await page.locator("#view-" + view[0]).screenshot({
-            path: path.join(shotDir, "universal_" + view[0] + "_" + size[0] + "_" + theme + ".png")
-          });
+    const opened = await openPage(browser, url, size[1], "dark", journal);
+    const page = opened.page;
+    try {
+      assert((await page.locator("html").getAttribute("data-theme")) === "dark", "shot theme");
+      await page.getByRole("tab", { name: "Overview" }).click();
+      await shows(page, "#dashRealized", "+$");
+      await noOverflow(page, size[0] + " overview");
+      await shotView(page, "investor_overview_" + size[0] + ".png");
+      for (const section of sections) {
+        await page.getByRole("tab", { name: section[1] }).click();
+        await page.waitForSelector("#view-" + section[0] + ":not([hidden])");
+        if (section[0] === "markets") {
+          await page.waitForFunction(function () {
+            const el = document.getElementById("chartMount");
+            const widgetState = el && el.getAttribute("data-widget-state");
+            return widgetState === "loaded" || widgetState === "fallback" || widgetState === "empty";
+          }, null, { timeout: 12000 });
         }
-        if (page.errors.length) throw new Error(page.errors.join("\n"));
-      } finally {
-        await opened.context.close();
+        if (section[0] === "risk") {
+          await page.locator("#riskAccount").fill("10000");
+          await page.locator("#riskPercent").fill("1");
+          await page.locator("#riskEntry").fill("50");
+          await page.locator("#riskStop").fill("48");
+          await page.locator("#riskTarget").fill("56");
+          await page.getByRole("button", { name: "Calculate size" }).click();
+          await shows(page, "#riskResult", "50");
+        }
+        await noOverflow(page, size[0] + " " + section[0]);
+        await shotView(page, section[2] + "_" + size[0] + ".png");
       }
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
+    }
+  }
+  const empty = { schemaVersion: 2, settings: {}, trades: [], days: {} };
+  for (const size of sizes) {
+    const opened = await openPage(browser, url, size[1], "dark", empty);
+    const page = opened.page;
+    try {
+      await shows(page, "#dashboardBody", "No trades recorded yet");
+      await shows(page, "#dashRealized", "N/A");
+      await noOverflow(page, size[0] + " empty overview");
+      await shotView(page, "investor_overview_empty_" + size[0] + ".png");
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
     }
   }
   console.log("screenshots saved");
