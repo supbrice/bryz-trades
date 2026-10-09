@@ -171,7 +171,7 @@
   function mountTape(container, config) {
     if (!config || !config.symbols || !config.symbols.length) {
       if (container) {
-        container.innerHTML = fallbackHtml("No watchlist prices", "Add a symbol to the watchlist. Ladder does not invent a quote.");
+        container.innerHTML = fallbackHtml("No watchlist prices", "Add a symbol to the watchlist. Bryz Trades does not invent a quote.");
         container.setAttribute("data-widget-state", "empty");
         container.setAttribute("data-widget-config", JSON.stringify(config || { symbols: [] }));
       }

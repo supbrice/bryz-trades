@@ -291,6 +291,41 @@ test("v2 and v3 files import, and a newer schema does not apply", () => {
   assert.match(tooNew.error, /schema version 4/);
 });
 
+test("a saved schema 3 journal is not rewritten, and an old ladder export still imports", () => {
+  const raw = JSON.stringify({
+    schemaVersion: 3,
+    trades: [trade({ id: "kept", symbol: "IBM" })],
+    days: { "2026-04-04": { entryType: "manual", manualPnl: 3, note: "kept", breakdown: [], adjustment: null, adjustmentNote: "" } },
+    settings: { accountSize: 1000, riskPercent: 1, selectedSymbol: "IBM", selectedExchange: "", chartPeriod: "6M", watchlist: [] }
+  });
+  const store = storage.createMemoryStorage({
+    [schema.KEYS.journal]: raw,
+    [schema.KEYS.v2]: "{\"schemaVersion\":2,\"app\":\"ladder\"}",
+    [schema.KEYS.premigration]: "premigration-bytes",
+    [schema.KEYS.premigrationV3]: "premigration-v3-bytes",
+    [schema.KEYS.corrupt]: "corrupt-bytes"
+  });
+  const loaded = storage.loadJournal(store);
+  assert.equal(store.getItem(schema.KEYS.journal), raw);
+  assert.equal(store.getItem(schema.KEYS.v2), "{\"schemaVersion\":2,\"app\":\"ladder\"}");
+  assert.equal(store.getItem(schema.KEYS.premigration), "premigration-bytes");
+  assert.equal(store.getItem(schema.KEYS.premigrationV3), "premigration-v3-bytes");
+  assert.equal(store.getItem(schema.KEYS.corrupt), "corrupt-bytes");
+  assert.equal(loaded.warning, "");
+  assert.equal(loaded.data.trades[0].symbol, "IBM");
+  assert.equal(loaded.data.days["2026-04-04"].manualPnl, 3);
+  const oldExport = schema.planImport(schema.emptyJournal(), JSON.stringify({
+    schemaVersion: 3,
+    app: "ladder",
+    trades: [trade({ id: "oldfile", symbol: "GE" })],
+    days: {},
+    settings: {}
+  }));
+  assert.equal(oldExport.ok, true);
+  assert.equal(oldExport.journal.trades[0].symbol, "GE");
+  assert.match(schema.exportJson(loaded.data), /"app": "ladder"/);
+});
+
 test("partial exits cannot cover more shares than the position", () => {
   const built = schema.tradeFromFields({
     symbol: "NVDA",
