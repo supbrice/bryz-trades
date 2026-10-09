@@ -19,7 +19,36 @@
     document.getElementById("nextMonth").addEventListener("click", function () { handlers.shiftMonth(1); });
     document.getElementById("todayBtn").addEventListener("click", function () { handlers.goToday(); });
     document.getElementById("logTodayBtn").addEventListener("click", function () { handlers.openDay(ST.dateKey(state.today)); });
-    document.getElementById("positionFilter").addEventListener("change", function () { handlers.setFilter(this.value); });
+    document.getElementById("positionFilter").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionSymbol").addEventListener("input", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionFrom").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("positionTo").addEventListener("change", function () { handlers.setFilter(readPositionQuery()); });
+    document.getElementById("analyticsSymbol").addEventListener("input", function () { handlers.setAnalytics(readAnalyticsQuery()); });
+    document.getElementById("analyticsStatus").addEventListener("change", function () { handlers.setAnalytics(readAnalyticsQuery()); });
+    document.getElementById("symbolForm").addEventListener("submit", function (event) {
+      event.preventDefault();
+      handlers.selectSymbol({ symbol: valueOf("symbolSearch"), exchange: valueOf("symbolExchange") });
+    });
+    document.getElementById("watchAdd").addEventListener("click", function () {
+      handlers.addWatch({ symbol: valueOf("symbolSearch"), exchange: valueOf("symbolExchange") });
+    });
+    document.getElementById("exchangeHint").addEventListener("click", function () {
+      const hint = this.getAttribute("data-exchange") || "";
+      if (hint) document.getElementById("symbolExchange").value = hint;
+    });
+    document.getElementById("dashAddTrade").addEventListener("click", function () { handlers.addTrade(); });
+    document.getElementById("dashPositions").addEventListener("click", function () { handlers.setTab("positions"); });
+    document.getElementById("addExitBtn").addEventListener("click", function () {
+      document.getElementById("exitRows").insertAdjacentHTML("beforeend", exitRowHtml(null));
+      updateTradeChrome();
+    });
+    document.getElementById("exitRows").addEventListener("click", function (event) {
+      const btn = event.target.closest("[data-remove-exit]");
+      if (!btn) return;
+      const row = btn.closest(".exit-row");
+      if (row) row.remove();
+      updateTradeChrome();
+    });
     document.getElementById("rangePreset").addEventListener("change", function () { handlers.setRange({ preset: this.value }); });
     document.getElementById("rangeFrom").addEventListener("change", function () { handlers.setRange({ preset: "custom", from: this.value, to: document.getElementById("rangeTo").value }); });
     document.getElementById("rangeTo").addEventListener("change", function () { handlers.setRange({ preset: "custom", from: document.getElementById("rangeFrom").value, to: this.value }); });
@@ -97,6 +126,23 @@
       if (closeTrade) { handlers.closeTrade(closeTrade.dataset.closeTrade); return; }
       const remove = event.target.closest("[data-remove]");
       if (remove) handlers.removeTrade(remove.dataset.remove);
+      const period = event.target.closest("[data-period]");
+      if (period) { handlers.setPeriod(period.dataset.period); return; }
+      const pick = event.target.closest("[data-pick-symbol]");
+      if (pick) {
+        handlers.selectSymbol({ symbol: pick.dataset.pickSymbol, exchange: pick.dataset.exchange || "" });
+        return;
+      }
+      const chartBtn = event.target.closest("[data-chart-symbol]");
+      if (chartBtn) {
+        handlers.selectSymbol({ symbol: chartBtn.dataset.chartSymbol, exchange: chartBtn.dataset.exchange || "" });
+        return;
+      }
+      const dropWatch = event.target.closest("[data-remove-watch]");
+      if (dropWatch) handlers.removeWatch(dropWatch.dataset.removeWatch);
+    });
+    document.addEventListener("ladder-theme", function () {
+      if (state) syncWidgets(state);
     });
 
     document.querySelectorAll("dialog").forEach(function (dialog) {
@@ -114,6 +160,8 @@
     drawCalendar();
     drawAnalytics();
     fillRiskDefaults();
+    drawSymbolChrome();
+    syncWidgets(state);
   };
 
   ST.showBanner = function (message, isError) {
@@ -136,7 +184,8 @@
     tradeMode = mode || (trade ? "edit" : "create");
     const fields = document.getElementById("tradeFields");
     fields.disabled = false;
-    document.getElementById("fieldSymbol").value = trade ? trade.symbol : "";
+    document.getElementById("fieldSymbol").value = trade ? trade.symbol : (state && state.data.settings && state.data.settings.selectedSymbol || "");
+    document.getElementById("fieldExchange").value = trade ? trade.exchange || "" : (state && state.data.settings && state.data.settings.selectedExchange || "");
     document.getElementById("fieldName").value = trade ? trade.name || "" : "";
     document.getElementById("fieldDirection").value = trade && trade.direction === "short" ? "short" : "long";
     document.getElementById("fieldStatus").value = trade ? trade.status : "open";
@@ -160,6 +209,9 @@
     document.getElementById("fieldOrder").value = trade && trade.orderStatus ? trade.orderStatus : "";
     setControl("fieldFill", trade && trade.fillPrice);
     setControl("fieldClose", trade && trade.close);
+    setControl("fieldMark", trade && trade.markPrice);
+    document.getElementById("fieldMarkAsOf").value = trade && trade.markAsOf || "";
+    renderExitRows(trade && trade.exits || []);
     const used = !!(trade && (trade.getIn != null || trade.getOut != null || trade.hardStop != null || trade.orderStatus || trade.fillPrice != null || trade.close != null));
     document.getElementById("levelsDetails").open = used;
     if (tradeMode === "close") {
@@ -241,12 +293,21 @@
     }).slice(0, 5);
     const recentHtml = closed.length
       ? '<h3 class="section-title">Recent closed trades</h3><ul class="perf-list">' + closed.map(function (result) {
-        const trade = state.data.trades.find(function (item) { return item.id === result.id; });
         return "<li><span><strong>" + ST.escapeHtml(result.symbol) + "</strong> " + ST.escapeHtml(result.exitDate || "no exit date") + "</span>" + moneyHtml(result.netCents) + "</li>";
       }).join("") + "</ul>"
       : '<p class="empty">No closed trades yet. Open positions stay off realized profit and loss until you record an exit.</p>';
+    const books = ST.portfolioSnapshot(state.data);
+    const unrealized = books.unrealizedCents == null
+      ? '<div class="stat" id="dashUnrealized"><div class="label">Unrealized P/L</div><div class="value na">N/A <span class="tag">no manual mark</span></div></div>'
+      : stat("Unrealized P/L, manual marks", books.unrealizedCents, "id=\"dashUnrealized\"");
     document.getElementById("dashboardBody").innerHTML =
       '<div class="stats">' +
+        '<div class="stat" id="dashPortfolio"><div class="label">Portfolio market value</div><div class="value na">N/A <span class="tag">not inferred</span></div></div>' +
+        '<div class="stat" id="dashCash"><div class="label">Cash balance</div><div class="value na">N/A <span class="tag">not tracked</span></div></div>' +
+        unrealized +
+        '<div class="stat" id="dashCost"><div class="label">Recorded cost of open longs</div><div class="value flat">' +
+          (books.recordedLongCostCents == null ? 'N/A <span class="tag">no open long shares</span>' : ST.escapeHtml(ST.formatCents(books.recordedLongCostCents)) + ' <span class="tag">not market value</span>') +
+        "</div></div>" +
         stat("Year to date, closed trades", ytdMetrics.realizedNetCents, "id=\"dashYtd\"") +
         stat("All dated closes", all.realizedNetCents, "id=\"dashRealized\"") +
         '<div class="stat" id="dashOpen"><div class="label">Open trades</div><div class="value flat">' + openCount + ' <span class="tag">not realized</span></div></div>' +
@@ -254,14 +315,29 @@
         stat("Today, manual entry", today.manualCents, "id=\"dashTodayManual\"") +
         '<div class="stat record"><div class="label">Best and worst dated day, year to date</div><div class="extremes">' +
           extreme("Best", ytdMetrics.bestDay) + extreme("Worst", ytdMetrics.worstDay) +
-        "</div></div></div>" + recentHtml +
-      (recent.length ? "" : "");
+        "</div></div></div>" +
+      '<h3 class="section-title">Recorded performance</h3><p class="hint">' + ST.escapeHtml(ST.METRIC_HELP.cumulative) + "</p>" +
+      curveSvg(all.curve) + recentHtml;
+    drawSymbolDetail();
+    drawWatchlist();
   }
 
   function drawPositions() {
-    document.getElementById("positionFilter").value = state.positionFilter || "all";
+    const filterEl = document.getElementById("positionFilter");
+    if (document.activeElement !== filterEl) filterEl.value = state.positionFilter || "all";
+    setIfIdle("positionSymbol", state.positionSymbol || "");
+    setIfIdle("positionFrom", state.positionFrom || "");
+    setIfIdle("positionTo", state.positionTo || "");
     const filter = state.positionFilter || "all";
-    const trades = state.data.trades.filter(function (trade) { return filter === "all" || trade.status === filter; });
+    const symbol = String(state.positionSymbol || "").trim().replace(/^\$/, "").toUpperCase();
+    const from = state.positionFrom || "";
+    const to = state.positionTo || "";
+    const trades = state.data.trades.filter(function (trade) {
+      if (filter !== "all" && trade.status !== filter) return false;
+      if (symbol && trade.symbol !== symbol) return false;
+      if ((from || to) && !tradeInDateRange(trade, from, to)) return false;
+      return true;
+    });
     const list = document.getElementById("positionsList");
     if (!state.data.trades.length) {
       list.innerHTML = '<p class="empty">No trades yet. Add one to record a ticker, direction, and plan. Nothing is sent to a broker.</p>';
@@ -287,19 +363,30 @@
     if (trade.hardStop != null) plans.push("Planned stop " + ST.formatPlainMoney(trade.hardStop));
     const checklist = ST.computeStatus(trade);
     const pill = checklist ? '<p class="pill ' + checklist.kind + '">' + ST.escapeHtml(checklist.text) + "</p>" : "";
+    const books = ST.positionAccounting(trade);
     const closeBtn = trade.status === "open"
       ? '<button type="button" data-close-trade="' + ST.escapeHtml(trade.id) + '">Close</button>'
       : "";
+    let partialLine = "";
+    if (books.partial || (trade.exits && trade.exits.length)) {
+      partialLine = '<p class="meta">Average-cost exits. Remaining ' + ST.escapeHtml(books.remainingQty == null ? "N/A" : ST.formatShares(books.remainingQty)) +
+        ". Realized on exits " + (books.realizedNetCents == null ? "N/A" : ST.escapeHtml(ST.formatCents(books.realizedNetCents))) + ".</p>";
+    }
+    const unrealizedLine = books.unrealizedReason === "manual-mark"
+      ? '<p class="meta">Unrealized ' + ST.escapeHtml(ST.formatCents(books.unrealizedCents)) + " at manual mark" + (books.markAsOf ? " as of " + ST.escapeHtml(books.markAsOf) : " (as-of date not recorded)") + ".</p>"
+      : (trade.status === "open" ? '<p class="meta">Unrealized P/L: N/A until you enter a manual mark.</p>' : "");
     return '<article class="stock-card"><h3>' + ST.escapeHtml(trade.symbol) +
       ' <span class="dir">' + (trade.direction === "short" ? "Short" : "Long") + "</span></h3>" +
-      '<p class="pill ' + trade.status + '">' + ST.escapeHtml(help.summary) + "</p>" +
+      '<p class="pill ' + trade.status + '">' + ST.escapeHtml(books.partial ? "Open — partially exited" : help.summary) + "</p>" +
       '<p class="card-notes">' + ST.escapeHtml(help.detail) + "</p>" +
       '<p class="meta">' + ST.escapeHtml(bits.join(" · ")) + "</p>" +
       (plans.length ? '<p class="levels">' + ST.escapeHtml(plans.join(" · ")) + "</p>" : "") +
       (trade.name ? '<p class="meta">' + ST.escapeHtml(trade.name) + "</p>" : "") +
       pill +
       (trade.notes ? '<p class="card-notes">' + ST.escapeHtml(trade.notes) + "</p>" : "") +
+      partialLine + unrealizedLine +
       '<div class="card-actions">' +
+        '<button type="button" data-chart-symbol="' + ST.escapeHtml(trade.symbol) + '" data-exchange="' + ST.escapeHtml(trade.exchange || "") + '">Chart</button>' +
         '<button type="button" data-review="' + ST.escapeHtml(trade.id) + '">Review</button>' +
         '<button type="button" data-edit="' + ST.escapeHtml(trade.id) + '">Edit</button>' +
         closeBtn +
@@ -360,7 +447,15 @@
     document.getElementById("rangeHint").textContent = start
       ? label + ": exit dates from " + start + " through " + end + ", inclusive. Results are placed on the exit date, not the entry date."
       : "All closed trades that have an exit date. Trades without an exit date are listed separately and are not in the totals.";
-    const metrics = ST.analyze(state.data, { start: start, end: end });
+    setIfIdle("analyticsSymbol", state.analyticsSymbol || "");
+    const statusEl = document.getElementById("analyticsStatus");
+    if (document.activeElement !== statusEl) statusEl.value = state.analyticsStatus || "all";
+    const metrics = ST.analyze(state.data, {
+      start: start,
+      end: end,
+      symbol: state.analyticsSymbol || "",
+      status: state.analyticsStatus || "all"
+    });
     if (metrics.invalidRange) {
       document.getElementById("analyticsBody").innerHTML = '<p class="empty">The start date is after the end date.</p>';
       return;
@@ -573,6 +668,15 @@
   function tradePreviewHtml() {
     const draft = readTradeFields();
     draft.id = editingId || "draft";
+    const books = ST.positionAccounting(draft);
+    if (draft.exits && draft.exits.length) {
+      const realized = books.realizedNetCents == null ? "N/A" : ST.formatCents(books.realizedNetCents) + " " + ST.pnlWord(books.realizedNetCents);
+      const unrealized = books.unrealizedReason === "manual-mark"
+        ? ST.formatCents(books.unrealizedCents) + " at a manual mark" + (books.markAsOf ? " as of " + books.markAsOf : "")
+        : "N/A until you enter a manual mark";
+      return "<h3>Average-cost exits</h3><p>Realized on the exits you listed: " + ST.escapeHtml(realized) + ". Remaining shares " +
+        ST.escapeHtml(books.remainingQty == null ? "N/A" : ST.formatShares(books.remainingQty)) + ". Unrealized: " + ST.escapeHtml(unrealized) + ".</p>";
+    }
     const result = ST.tradeResult(draft);
     if (result.reason === "incomplete") {
       return "<h3>Closed — incomplete</h3><p>A closing price, an entry price, and a share count are all needed before this counts as realized. Nothing was invented. Realized P/L: N/A.</p>";
@@ -607,7 +711,11 @@
   function readTradeFields() {
     return {
       symbol: valueOf("fieldSymbol"),
+      exchange: valueOf("fieldExchange"),
       name: valueOf("fieldName"),
+      exits: readExitRows(),
+      markPrice: valueOf("fieldMark"),
+      markAsOf: valueOf("fieldMarkAsOf"),
       direction: valueOf("fieldDirection"),
       status: valueOf("fieldStatus"),
       quantity: valueOf("fieldShares"),
@@ -816,6 +924,200 @@
 
   function countPhrase(count, singular, plural) {
     return count + " " + (count === 1 ? singular : plural);
+  }
+
+  function setIfIdle(id, value) {
+    const el = document.getElementById(id);
+    if (!el || document.activeElement === el) return;
+    el.value = value || "";
+  }
+
+  function readPositionQuery() {
+    return {
+      filter: valueOf("positionFilter"),
+      symbol: valueOf("positionSymbol"),
+      from: valueOf("positionFrom"),
+      to: valueOf("positionTo")
+    };
+  }
+
+  function readAnalyticsQuery() {
+    return { symbol: valueOf("analyticsSymbol"), status: valueOf("analyticsStatus") };
+  }
+
+  function tradeInDateRange(trade, from, to) {
+    const dates = [trade.entryDate, trade.exitDate].concat((trade.exits || []).map(function (exit) { return exit.date; })).filter(Boolean);
+    if (!dates.length) return false;
+    return dates.some(function (key) {
+      if (from && key < from) return false;
+      if (to && key > to) return false;
+      return true;
+    });
+  }
+
+  function exitRowHtml(exit) {
+    const reason = exit && exit.reason || "";
+    return '<div class="split-row exit-row">' +
+      '<label>Shares<input class="exit-qty" inputmode="decimal" value="' + ST.escapeHtml(exit && exit.quantity != null ? exit.quantity : "") + '" /></label>' +
+      '<label>Price<input class="exit-price" inputmode="decimal" value="' + ST.escapeHtml(exit && exit.price != null ? exit.price : "") + '" /></label>' +
+      '<label>Date<input class="exit-date" type="date" value="' + ST.escapeHtml(exit && exit.date || "") + '" /></label>' +
+      '<label>Fees<input class="exit-fees" inputmode="decimal" value="' + ST.escapeHtml(exit && exit.fees != null ? exit.fees : "") + '" /></label>' +
+      '<label>Reason<select class="exit-reason">' +
+        '<option value=""' + (reason === "" ? " selected" : "") + '>Not recorded</option>' +
+        '<option value="target"' + (reason === "target" ? " selected" : "") + '>Recorded as target exit</option>' +
+        '<option value="stop"' + (reason === "stop" ? " selected" : "") + '>Recorded as stop exit</option>' +
+        '<option value="other"' + (reason === "other" ? " selected" : "") + '>Other</option>' +
+      "</select></label>" +
+      '<button type="button" data-remove-exit>Remove</button></div>';
+  }
+
+  function renderExitRows(exits) {
+    document.getElementById("exitRows").innerHTML = (exits || []).map(exitRowHtml).join("");
+    document.getElementById("partialDetails").open = !!(exits && exits.length);
+  }
+
+  function readExitRows() {
+    const rows = [];
+    document.querySelectorAll("#exitRows .exit-row").forEach(function (row) {
+      const quantity = row.querySelector(".exit-qty").value;
+      const price = row.querySelector(".exit-price").value;
+      const date = row.querySelector(".exit-date").value;
+      const fees = row.querySelector(".exit-fees").value;
+      const reason = row.querySelector(".exit-reason").value;
+      if (!String(quantity).trim() && !String(price).trim() && !String(date).trim()) return;
+      rows.push({ quantity: quantity, price: price, date: date, fees: fees, reason: reason });
+    });
+    return rows;
+  }
+
+  function drawSymbolChrome() {
+    const settings = state.data.settings || {};
+    const fallback = state.data.trades.find(function (trade) { return trade.symbol; });
+    const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";
+    const exchange = settings.selectedExchange || "";
+    setIfIdle("symbolSearch", symbol);
+    setIfIdle("symbolExchange", exchange);
+    const hint = symbol && ST.EXCHANGE_HINTS ? ST.EXCHANGE_HINTS[symbol] : "";
+    const hintBtn = document.getElementById("exchangeHint");
+    const hintText = document.getElementById("exchangeHintText");
+    if (hint && !exchange) {
+      hintBtn.hidden = false;
+      hintBtn.setAttribute("data-exchange", hint);
+      hintBtn.textContent = "Use " + hint;
+      hintText.textContent = "Suggested exchange " + hint + " for " + symbol + ". It is a venue hint, not a quote.";
+    } else {
+      hintBtn.hidden = true;
+      hintText.textContent = symbol ? "Exchange is optional. A blank exchange sends the ticker alone." : "Enter a ticker to load a chart.";
+    }
+    const symbols = { AAPL: true, NVDA: true, SOFI: true, TSLA: true, MSFT: true };
+    state.data.trades.forEach(function (trade) { if (trade.symbol) symbols[trade.symbol] = true; });
+    (settings.watchlist || []).forEach(function (item) { if (item.symbol) symbols[item.symbol] = true; });
+    document.getElementById("symbolSuggestions").innerHTML = Object.keys(symbols).sort().map(function (item) {
+      return '<option value="' + ST.escapeHtml(item) + '"></option>';
+    }).join("");
+    document.querySelectorAll("[data-period]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", btn.dataset.period === (settings.chartPeriod || "6M") ? "true" : "false");
+    });
+  }
+
+  function drawSymbolDetail() {
+    const settings = state.data.settings || {};
+    const fallback = state.data.trades.find(function (trade) { return trade.symbol; });
+    const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";
+    const body = document.getElementById("symbolDetailBody");
+    if (!symbol) {
+      body.innerHTML = '<p class="empty" id="symbolDetailName">Choose a symbol. Market value stays N/A.</p>';
+      return;
+    }
+    const metrics = ST.analyze(state.data, { symbol: symbol });
+    const trades = state.data.trades.filter(function (trade) { return trade.symbol === symbol; });
+    let unrealized = null;
+    let unmarked = 0;
+    trades.forEach(function (trade) {
+      const books = ST.positionAccounting(trade);
+      if (books.unrealizedReason === "manual-mark" && typeof books.unrealizedCents === "bigint") {
+        unrealized = (unrealized == null ? 0n : unrealized) + books.unrealizedCents;
+      } else if (books.remainingQty != null && books.remainingQty > 0) unmarked += 1;
+    });
+    body.innerHTML = '<p class="meta" id="symbolDetailName"><strong>' + ST.escapeHtml(symbol) + "</strong>" +
+      (settings.selectedExchange ? " · " + ST.escapeHtml(settings.selectedExchange) : "") + "</p>" +
+      '<div class="stats">' +
+        stat("Realized, this symbol", metrics.realizedNetCents, "id=\"symbolRealized\"") +
+        '<div class="stat" id="symbolUnrealized"><div class="label">Unrealized, manual marks</div>' +
+          (unrealized == null ? '<div class="value na">N/A <span class="tag">no manual mark</span></div>' : moneyHtml(unrealized)) +
+        "</div>" +
+        '<div class="stat"><div class="label">Market price</div><div class="value na">N/A <span class="tag">not read from the chart</span></div></div></div>' +
+      '<p class="hint">' + (unmarked
+        ? ST.escapeHtml(unmarked + " open position" + (unmarked === 1 ? " has" : "s have") + " no manual mark.")
+        : "Unrealized P/L uses only a mark you type.") + "</p>" +
+      (trades.length
+        ? '<ul class="perf-list">' + trades.map(function (trade) {
+          const books = ST.positionAccounting(trade);
+          return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(trade.status) + " " + ST.escapeHtml(trade.direction) +
+            "</span><span>" + ST.escapeHtml(books.remainingQty == null ? "quantity N/A" : ST.formatShares(books.remainingQty) + " left") + "</span></li>";
+        }).join("") + "</ul>"
+        : '<p class="empty">No saved trades for this symbol. The chart can still load. Nothing is added until you save a trade.</p>');
+  }
+
+  function drawWatchlist() {
+    const settings = state.data.settings || {};
+    const held = Object.create(null);
+    state.data.trades.forEach(function (trade) {
+      if (trade.symbol) held[trade.symbol] = trade.exchange || held[trade.symbol] || "";
+    });
+    const chips = [];
+    Object.keys(held).sort().forEach(function (symbol) {
+      chips.push(chipHtml(symbol, held[symbol], "In journal", false));
+    });
+    (settings.watchlist || []).forEach(function (item) {
+      if (held[item.symbol]) return;
+      chips.push(chipHtml(item.symbol, item.exchange, "Watchlist", true));
+    });
+    const body = document.getElementById("watchlistBody");
+    body.innerHTML = chips.length
+      ? '<div class="chip-row">' + chips.join("") + "</div>"
+      : '<p class="empty">No symbols yet. Add a trade or a watchlist ticker.</p>';
+  }
+
+  function chipHtml(symbol, exchange, label, removable) {
+    const active = state.data.settings && state.data.settings.selectedSymbol === symbol;
+    return '<button type="button" class="chip' + (active ? " active" : "") + '" data-pick-symbol="' + ST.escapeHtml(symbol) +
+      '" data-exchange="' + ST.escapeHtml(exchange || "") + '">' + ST.escapeHtml(symbol) + " <span class=\"tag\">" + ST.escapeHtml(label) + "</span></button>" +
+      (removable ? '<button type="button" data-remove-watch="' + ST.escapeHtml(symbol) + '" aria-label="Remove ' + ST.escapeHtml(symbol) + ' from watchlist">Remove</button>' : "");
+  }
+
+  function tapeItems(journal) {
+    const settings = journal.settings || {};
+    if (settings.watchlist && settings.watchlist.length) return settings.watchlist.slice(0, 12);
+    const items = [];
+    const seen = Object.create(null);
+    (journal.trades || []).forEach(function (trade) {
+      if (!trade.symbol || seen[trade.symbol] || items.length >= 12) return;
+      seen[trade.symbol] = true;
+      items.push({ symbol: trade.symbol, exchange: trade.exchange || (ST.EXCHANGE_HINTS && ST.EXCHANGE_HINTS[trade.symbol]) || "" });
+    });
+    return items;
+  }
+
+  function syncWidgets(current) {
+    if (!current || current.tab !== "dashboard" || !ST.mountChart) return;
+    const settings = current.data.settings || {};
+    const fallback = current.data.trades.find(function (trade) { return trade.symbol; });
+    const symbol = settings.selectedSymbol || (fallback && fallback.symbol) || "";
+    const exchange = settings.selectedExchange || (symbol && ST.EXCHANGE_HINTS && ST.EXCHANGE_HINTS[symbol]) || "";
+    const theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    const chart = document.getElementById("chartMount");
+    if (!symbol) {
+      chart.innerHTML = '<div class="chart-fallback" role="status"><p><strong>No symbol selected</strong></p><p>Enter a ticker to load a chart. No price is invented.</p></div>';
+      chart.setAttribute("data-widget-state", "empty");
+      chart.removeAttribute("data-widget-config");
+    } else {
+      const config = ST.chartWidgetConfig(symbol, exchange, settings.chartPeriod || "6M", theme);
+      chart.setAttribute("aria-label", "Price chart for " + config.symbol);
+      ST.mountChart(chart, config);
+    }
+    const items = tapeItems(current.data);
+    ST.mountTape(document.getElementById("tapeMount"), ST.tapeWidgetConfig(items, theme));
   }
 
   function showFormError(id, message) {

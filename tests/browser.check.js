@@ -1,11 +1,13 @@
 /* Dev-only browser checks. The site does not load this file. */
 const http = require("node:http");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const shotDir = "/opt/cursor/artifacts/screenshots";
+const fullShotDir = path.join(os.tmpdir(), "ladder-browser-shots");
 const views = [
   ["dashboard", "Dashboard"],
   ["positions", "Positions"],
@@ -192,7 +194,11 @@ async function openPage(browser, url, viewport, theme, journal) {
   }, { theme: theme, journal: journal ? JSON.stringify(journal) : "", v1: "" });
   const page = await context.newPage();
   const errors = [];
-  page.on("pageerror", function (err) { errors.push(err.message); });
+  page.on("pageerror", function (err) {
+    const message = String(err && err.message || err);
+    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
+    errors.push(message);
+  });
   await page.goto(url, { waitUntil: "load" });
   await page.waitForSelector("h1");
   if (errors.length) throw new Error(errors.join("\n"));
@@ -203,6 +209,45 @@ async function openPage(browser, url, viewport, theme, journal) {
 async function shows(page, selector, text) {
   const body = await page.locator(selector).innerText();
   assert(body.includes(text), selector + " should include " + text + " but was:\n" + body);
+}
+
+async function assertThemeIcon(page, theme) {
+  const dark = theme === "dark";
+  const button = page.locator("#themeToggle");
+  const moon = button.locator(".theme-icon-moon");
+  const sun = button.locator(".theme-icon-sun");
+  const moonBox = await moon.boundingBox();
+  const sunBox = await sun.boundingBox();
+  const box = await button.boundingBox();
+  assert(box && box.width >= 72 && box.height >= 44, "theme button size " + JSON.stringify(box));
+  if (dark) {
+    assert(moonBox && moonBox.width > 8 && moonBox.height > 8, "crescent visible in dark mode");
+    assert(sunBox == null, "sun hidden in dark mode");
+  } else {
+    assert(sunBox && sunBox.width > 8 && sunBox.height > 8, "sun visible in light mode");
+    assert(moonBox == null, "crescent hidden in light mode");
+  }
+  const label = await button.getAttribute("aria-label");
+  const title = await button.getAttribute("title");
+  const pressed = await button.getAttribute("aria-pressed");
+  const hidden = await page.locator("#themeToggleLabel").innerText();
+  if (dark) {
+    assert(label === "Dark mode, switch to light mode", "aria-label " + label);
+    assert(title === "Switch to light mode", "title " + title);
+    assert(pressed === "true", "aria-pressed dark");
+    assert(hidden === "Dark", "hidden label " + hidden);
+  } else {
+    assert(label === "Light mode, switch to dark mode", "aria-label " + label);
+    assert(title === "Switch to dark mode", "title " + title);
+    assert(pressed === "false", "aria-pressed light");
+    assert(hidden === "Light", "hidden label " + hidden);
+  }
+  const visible = await button.evaluate(function (btn) {
+    const text = window.getComputedStyle(btn.querySelector(".visually-hidden"));
+    const clipped = text.position === "absolute" && (text.clip !== "auto" || text.width === "1px");
+    return btn.innerText.replace(/\s+/g, " ").trim() === "" || clipped;
+  });
+  assert(visible, "theme text label stays visually hidden");
 }
 
 async function noOverflow(page, label) {
@@ -217,6 +262,7 @@ async function noOverflow(page, label) {
 
 async function main() {
   fs.mkdirSync(shotDir, { recursive: true });
+  fs.mkdirSync(fullShotDir, { recursive: true });
   const server = await serve();
   const url = "http://127.0.0.1:" + server.address().port + "/";
   const browser = await chromium.launch({ headless: true });
@@ -224,10 +270,13 @@ async function main() {
   const today = ymd(now);
   try {
     await runFlow(browser, url, today, { width: 390, height: 844 }, "phone");
+    await runFlow(browser, url, today, { width: 768, height: 1024 }, "tablet");
     await runFlow(browser, url, today, { width: 1280, height: 900 }, "desktop");
     await runMigration(browser, url);
     await runImports(browser, url, today);
     await runLarge(browser, url, today);
+    await runUniversal(browser, url, today);
+    await runChart(browser, url);
     await runShots(browser, url, demoJournal(now));
     console.log("browser checks passed");
   } finally {
@@ -313,10 +362,19 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.getByRole("button", { name: "Calculate size" }).click();
     await shows(page, "#riskResult", "above the entry");
 
-    await page.locator("#themeToggle").click();
+    await assertThemeIcon(page, "dark");
+    await page.locator("#themeToggle").focus();
+    await page.keyboard.press("Enter");
     assert((await page.locator("html").getAttribute("data-theme")) === "light", label + " theme");
     const saved = await page.evaluate(function () { return localStorage.getItem("stock-tracker-theme"); });
     assert(saved === "light", "theme storage");
+    await assertThemeIcon(page, "light");
+    await page.locator("#themeToggle").focus();
+    await page.keyboard.press(" ");
+    assert((await page.locator("html").getAttribute("data-theme")) === "dark", label + " keyboard back to dark");
+    await assertThemeIcon(page, "dark");
+    await page.locator("#themeToggle").click();
+    assert((await page.locator("html").getAttribute("data-theme")) === "light", label + " click to light");
     for (const view of views) {
       await page.getByRole("tab", { name: view[1] }).click();
       await noOverflow(page, label + " " + view[0] + " light");
@@ -340,24 +398,29 @@ async function runMigration(browser, url) {
   });
   const page = await context.newPage();
   const errors = [];
-  page.on("pageerror", function (err) { errors.push(err.message); });
+  page.on("pageerror", function (err) {
+    const message = String(err && err.message || err);
+    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
+    errors.push(message);
+  });
   await page.goto(url, { waitUntil: "load" });
   await page.getByRole("tab", { name: "Positions" }).click();
   await shows(page, "#positionsList", "Open — not realized");
   await shows(page, "#positionsList", "Pasted close is under the hard stop");
   const stored = await page.evaluate(function () {
     return {
-      v2: JSON.parse(localStorage.getItem("ladder-journal-v2")),
+      v3: JSON.parse(localStorage.getItem("ladder-journal-v3")),
       v1: localStorage.getItem("stock-tracker-v1"),
       backup: localStorage.getItem("ladder-journal-premigration")
     };
   });
   assert(stored.v1 && stored.v1.includes("old manual"), "v1 kept");
   assert(stored.backup && stored.backup.includes("before-schema-v2-migration"), "premigration backup");
-  assert(stored.v2.trades[0].status === "open", "migrated trade stays open");
-  assert(stored.v2.trades[0].exitPrice == null, "pasted close is not an exit");
-  assert(stored.v2.days["2026-01-05"].entryType === "manual", "manual label");
-  assert(stored.v2.days["2026-01-05"].manualPnl === 25.5, "manual amount");
+  assert(stored.v3.schemaVersion === 3, "upgraded schema");
+  assert(stored.v3.trades[0].status === "open", "migrated trade stays open");
+  assert(stored.v3.trades[0].exitPrice == null, "pasted close is not an exit");
+  assert(stored.v3.days["2026-01-05"].entryType === "manual", "manual label");
+  assert(stored.v3.days["2026-01-05"].manualPnl === 25.5, "manual amount");
   await page.getByRole("tab", { name: "Dashboard" }).click();
   await shows(page, "#dashRealized", "N/A");
   if (errors.length) throw new Error(errors.join("\n"));
@@ -394,7 +457,7 @@ async function runImports(browser, url, today) {
     fs.writeFileSync(badPath, "{");
     fs.writeFileSync(dupPath, duplicate);
     fs.writeFileSync(simPath, JSON.stringify(similar));
-    fs.writeFileSync(futurePath, JSON.stringify({ schemaVersion: 3, trades: [], days: {} }));
+    fs.writeFileSync(futurePath, JSON.stringify({ schemaVersion: 4, trades: [], days: {} }));
 
     async function choose(file) {
       await page.evaluate(function () {
@@ -421,7 +484,7 @@ async function runImports(browser, url, today) {
     await choose(futurePath);
     await page.waitForFunction(function () {
       const banner = document.getElementById("banner");
-      return banner && !banner.hidden && banner.textContent.includes("schema version 3");
+      return banner && !banner.hidden && banner.textContent.includes("schema version 4");
     });
     await page.getByRole("tab", { name: "Dashboard" }).click();
     await shows(page, "#dashRealized", "+$9.00");
@@ -431,7 +494,7 @@ async function runImports(browser, url, today) {
     await page.getByRole("button", { name: "Merge into this journal" }).click();
     await page.getByRole("tab", { name: "Dashboard" }).click();
     await shows(page, "#dashRealized", "+$9.00");
-    const count = await page.evaluate(function () { return JSON.parse(localStorage.getItem("ladder-journal-v2")).trades.length; });
+    const count = await page.evaluate(function () { return JSON.parse(localStorage.getItem("ladder-journal-v3")).trades.length; });
     assert(count === 1, "duplicate id was counted twice: " + count);
 
     await choose(simPath);
@@ -480,6 +543,175 @@ async function runLarge(browser, url, today) {
   }
 }
 
+async function runUniversal(browser, url, today) {
+  const journal = demoJournal(new Date());
+  const raw = JSON.stringify(journal);
+  const opened = await openPage(browser, url, { width: 1280, height: 900 }, "dark", journal);
+  const page = opened.page;
+  page.setDefaultTimeout(15000);
+  page.on("dialog", function (dialog) { dialog.accept(); });
+  try {
+    const stored = await page.evaluate(function (original) {
+      return {
+        v2: localStorage.getItem("ladder-journal-v2"),
+        v3: JSON.parse(localStorage.getItem("ladder-journal-v3")),
+        backup: localStorage.getItem("ladder-journal-premigration-v3")
+      };
+    });
+    assert(stored.v2 === raw, "v2 copy survives the upgrade");
+    assert(stored.v3.schemaVersion === 3, "journal is schema 3");
+    assert(stored.backup && stored.backup.includes("before-schema-v3-migration"), "v3 premigration backup");
+    assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SOFI" && trade.status === "open"; }), "SOFI survived");
+
+    await page.getByRole("tab", { name: "Positions" }).click();
+    await page.locator("#addTradeBtn").click();
+    await page.locator("#fieldSymbol").fill("MSFT");
+    await page.locator("#fieldExchange").fill("NASDAQ");
+    await page.locator("#fieldStatus").selectOption("open");
+    await page.locator("#fieldShares").fill("10");
+    await page.locator("#fieldEntry").fill("100");
+    await page.locator("#fieldEntryDate").fill(today);
+    await page.locator("#tradeSaveBtn").click();
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^MSFT/ }) }).getByRole("button", { name: "Edit" }).click();
+    await page.locator("#partialDetails summary").click();
+    await page.locator("#addExitBtn").click();
+    await page.locator(".exit-qty").fill("4");
+    await page.locator(".exit-price").fill("110");
+    await page.locator(".exit-date").fill(today);
+    await page.locator(".exit-fees").fill("0");
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "MSFT");
+    await shows(page, "#positionsList", "partially exited");
+    await shows(page, "#positionsList", "+$40.00");
+    await shows(page, "#positionsList", "6 shares");
+
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^MSFT/ }) }).getByRole("button", { name: "Edit" }).click();
+    await page.locator("#fieldMark").fill("120");
+    await page.locator("#fieldMarkAsOf").fill(today);
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "manual mark");
+    await shows(page, "#positionsList", "+$120.00");
+
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^AAPL/ }) }).getByRole("button", { name: "Edit" }).click();
+    await page.locator("#fieldName").fill("Apple Inc");
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "Apple Inc");
+
+    await page.locator("#positionSymbol").fill("AAPL");
+    await shows(page, "#positionsList", "AAPL");
+    const filtered = await page.locator("#positionsList").innerText();
+    assert(!filtered.includes("MSFT"), "symbol filter hid MSFT");
+    assert(!filtered.includes("SOFI"), "symbol filter hid SOFI");
+    await page.locator("#positionSymbol").fill("");
+
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^NVDA/ }) }).getByRole("button", { name: "Delete" }).click();
+    const afterDelete = await page.locator("#positionsList").innerText();
+    assert(!afterDelete.includes("NVDA"), "NVDA deleted");
+
+    const prices = await page.evaluate(function () {
+      const data = JSON.parse(localStorage.getItem("ladder-journal-v3"));
+      return data.trades.map(function (trade) { return trade.symbol + ":" + trade.entryPrice + ":" + trade.exitPrice; });
+    });
+    assert(prices.indexOf("AAPL:180:190") !== -1, "chart did not replace AAPL prices");
+    assert(prices.indexOf("MSFT:100:null") !== -1, "MSFT entry stayed manual");
+    console.log("universal journal passed");
+  } finally {
+    await opened.context.close();
+  }
+}
+
+async function readChartConfig(page) {
+  const raw = await page.locator("#chartMount").getAttribute("data-widget-config");
+  assert(raw, "chart config missing");
+  return JSON.parse(raw);
+}
+
+async function runChart(browser, url) {
+  const opened = await openPage(browser, url, { width: 390, height: 844 }, "light", demoJournal(new Date()));
+  const page = opened.page;
+  page.setDefaultTimeout(15000);
+  try {
+    await page.waitForSelector("#chartMount[data-widget-config]");
+    let config = await readChartConfig(page);
+    assert(config.symbol === "NASDAQ:SOFI", "default chart symbol " + config.symbol);
+    assert(config.range === "6M", "default range");
+    assert(config.theme === "light", "chart follows light theme");
+    const scriptSrc = await page.locator("#chartMount").getAttribute("data-widget-src");
+    assert(scriptSrc === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", scriptSrc);
+    const periods = [
+      ["1D", "1D"],
+      ["5D", "5D"],
+      ["1M", "1M"],
+      ["6M", "6M"],
+      ["YTD", "YTD"],
+      ["1Y", "12M"],
+      ["5Y", "60M"],
+      ["MAX", "ALL"]
+    ];
+    for (const pair of periods) {
+      await page.locator("[data-period=\"" + pair[0] + "\"]").click();
+      config = await readChartConfig(page);
+      assert(config.range === pair[1], pair[0] + " range was " + config.range);
+      assert(config.theme === "light", "period kept theme");
+    }
+    await page.locator("#symbolSearch").fill("NVDA");
+    await page.locator("#symbolExchange").fill("NASDAQ");
+    await page.locator("#symbolApply").click();
+    config = await readChartConfig(page);
+    assert(config.symbol === "NASDAQ:NVDA", "switched symbol " + config.symbol);
+    await page.locator("#themeToggle").click();
+    config = await readChartConfig(page);
+    assert(config.theme === "dark", "chart follows dark theme");
+    await page.waitForFunction(function () {
+      const el = document.getElementById("chartMount");
+      const widgetState = el && el.getAttribute("data-widget-state");
+      return widgetState === "loaded" || widgetState === "fallback";
+    }, null, { timeout: 12000 });
+    const state = await page.locator("#chartMount").getAttribute("data-widget-state");
+    if (state === "loaded") console.log("tradingview chart loaded");
+    else console.log("tradingview unreachable from this environment; fallback shown and widget config was still checked");
+    const journalAfter = await page.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
+    assert(journalAfter && journalAfter.includes("\"symbol\":\"SOFI\""), "chart did not clear the journal");
+    console.log("chart config passed");
+  } finally {
+    await opened.context.close();
+  }
+
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await context.addInitScript(function () {
+    localStorage.clear();
+    localStorage.setItem("stock-tracker-theme", "dark");
+  });
+  await context.route("**://*.tradingview.com/**", function (route) { route.abort(); });
+  await context.route("**://s3.tradingview.com/**", function (route) { route.abort(); });
+  const blocked = await context.newPage();
+  const errors = [];
+  blocked.on("pageerror", function (err) {
+    const message = String(err && err.message || err);
+    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
+    errors.push(message);
+  });
+  try {
+    await blocked.goto(url, { waitUntil: "load" });
+    await blocked.waitForSelector("#chartMount .chart-fallback", { timeout: 12000 });
+    const fallback = await blocked.locator("#chartMount").innerText();
+    assert(fallback.includes("Chart unavailable"), fallback);
+    assert(fallback.includes("No price was filled in"), fallback);
+    const config = JSON.parse(await blocked.locator("#chartMount").getAttribute("data-widget-config"));
+    assert(config.symbol === "NASDAQ:SOFI", "blocked config " + config.symbol);
+    assert(config.theme === "dark", "blocked theme");
+    const src = await blocked.locator("#chartMount").getAttribute("data-widget-src");
+    assert(src === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", src);
+    assert(await blocked.locator("#chartMount script").count() === 0, "failed chart does not leave the embed in the page");
+    const journal = await blocked.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
+    assert(journal && !journal.includes("\"markPrice\":1"), "no fabricated mark");
+    if (errors.length) throw new Error(errors.join("\n"));
+    console.log("chart failure state passed");
+  } finally {
+    await context.close();
+  }
+}
+
 async function runShots(browser, url, journal) {
   const sizes = [
     ["phone", { width: 390, height: 844 }],
@@ -492,13 +724,32 @@ async function runShots(browser, url, journal) {
       try {
         const themeAttr = await page.locator("html").getAttribute("data-theme");
         assert(themeAttr === theme, "screenshot theme " + theme);
-        for (const view of views) {
+        await assertThemeIcon(page, theme);
+        await page.getByRole("tab", { name: "Dashboard" }).click();
+        await page.waitForFunction(function () {
+          const el = document.getElementById("chartMount");
+          const widgetState = el && el.getAttribute("data-widget-state");
+          return widgetState === "loaded" || widgetState === "fallback";
+        }, null, { timeout: 12000 });
+        await page.locator("#view-dashboard").screenshot({
+          path: path.join(shotDir, "universal_dashboard_" + size[0] + "_" + theme + ".png")
+        });
+        await page.locator("#symbolDetail").screenshot({
+          path: path.join(shotDir, "universal_symbol_" + size[0] + "_" + theme + ".png")
+        });
+        await page.getByRole("tab", { name: "Positions" }).click();
+        await page.locator("#positionSymbol").fill("AAPL");
+        await page.waitForSelector("#positionsList");
+        await page.locator("#view-positions").screenshot({
+          path: path.join(shotDir, "universal_positions_" + size[0] + "_" + theme + ".png")
+        });
+        await page.locator("#positionSymbol").fill("");
+        for (const view of [["analytics", "Analytics"], ["settings", "Settings"]]) {
           await page.getByRole("tab", { name: view[1] }).click();
           await page.waitForSelector("#view-" + view[0] + ":not([hidden])");
           await noOverflow(page, size[0] + " " + theme + " " + view[0]);
-          await page.screenshot({
-            path: path.join(shotDir, view[0] + "_" + size[0] + "_" + theme + ".png"),
-            fullPage: true
+          await page.locator("#view-" + view[0]).screenshot({
+            path: path.join(shotDir, "universal_" + view[0] + "_" + size[0] + "_" + theme + ".png")
           });
         }
         if (page.errors.length) throw new Error(page.errors.join("\n"));

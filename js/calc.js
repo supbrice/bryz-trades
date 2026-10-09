@@ -12,6 +12,7 @@
   const TRADE_DATE_CONVENTION = "exit-date";
   const SHORT_RETURN_BASIS = "short-sale-proceeds";
   const LONG_RETURN_BASIS = "initial-entry-cost";
+  const COST_METHOD = "average-cost";
 
   const STATUS_HELP = {
     open: {
@@ -57,7 +58,9 @@
     drawdown: "How far the latest cumulative closed-trade total sits below its previous peak. N/A when there is no dated closed trade in the range. This is not a drawdown of account equity.",
     maxDrawdown: "Largest peak-to-trough drop in the daily cumulative closed-trade total. Same-day trades are summed before the peak is updated. N/A when there is no dated closed trade.",
     byTicker: "Realized net for each ticker, using the same closed trades as the other metrics.",
-    byStrategy: "Realized net for each strategy you recorded. Trades with no strategy are grouped as (No strategy)."
+    byStrategy: "Realized net for each strategy you recorded. Trades with no strategy are grouped as (No strategy).",
+    unrealized: "Unrealized profit and loss uses only a mark price you type, times the shares still open, at the same average entry used for realized exits. N/A when you have not entered a mark. Chart prices are never used.",
+    portfolioValue: "N/A. Ladder does not infer portfolio market value, cash, or holdings value from the chart or from trade history."
   };
 
   const RISK_DISCLAIMER = "This is a planning estimate, not financial advice, and it does not place an order. Actual losses can be larger than the planned risk because of gaps, slippage, fees, and execution.";
@@ -245,6 +248,61 @@
     return { basis: null, basisCents: null, percent: null };
   }
 
+  function exitLots(trade) {
+    if (!trade || !Array.isArray(trade.exits)) return [];
+    return trade.exits;
+  }
+
+  function lotEvents(trade) {
+    const entry = effectiveEntry(trade);
+    const source = entrySource(trade);
+    return exitLots(trade).map(function (exit, index) {
+      const result = {
+        id: (trade.id || "trade") + ":" + (exit && exit.id || index),
+        parentId: trade && trade.id || "",
+        symbol: trade && trade.symbol || "",
+        strategy: trade && trade.strategy || "",
+        direction: trade && trade.direction || "",
+        status: "closed",
+        exitDate: exit && exit.date || "",
+        included: false,
+        reason: "",
+        grossCents: null,
+        feeCents: null,
+        feesAssumedZero: false,
+        netCents: null,
+        returnBasis: null,
+        basisCents: null,
+        returnPercent: null,
+        entrySource: source,
+        dateNote: "",
+        lot: true
+      };
+      const gross = grossPnlCents(trade.direction, entry, exit && exit.price, exit && exit.quantity);
+      const fee = feeInfo(exit && exit.fees);
+      if (gross == null || fee.error) {
+        result.reason = "incomplete";
+        return result;
+      }
+      const net = gross - fee.cents;
+      const ret = returnFor(trade.direction, entry, exit.quantity, net);
+      result.included = true;
+      result.grossCents = gross;
+      result.feeCents = fee.cents;
+      result.feesAssumedZero = fee.assumedZero;
+      result.netCents = net;
+      result.returnBasis = ret.basis;
+      result.basisCents = ret.basisCents;
+      result.returnPercent = ret.percent;
+      if (!exit.date) result.reason = "undated";
+      else result.reason = "realized";
+      if (trade.entryDate && exit.date && exit.date < trade.entryDate) {
+        result.dateNote = "Exit date is before entry date. The result is still placed on the exit date.";
+      }
+      return result;
+    });
+  }
+
   function tradeResult(trade) {
     const status = trade && trade.status;
     const result = {
@@ -268,6 +326,32 @@
     };
     if (status === "cancelled") {
       result.reason = "cancelled";
+      return result;
+    }
+    if (exitLots(trade).length) {
+      const lots = lotEvents(trade);
+      let net = 0n;
+      let gross = 0n;
+      let fees = 0n;
+      let counted = 0;
+      let lastDate = "";
+      lots.forEach(function (lot) {
+        if (!lot.included) return;
+        counted += 1;
+        net += lot.netCents;
+        gross += lot.grossCents;
+        fees += lot.feeCents;
+        if (lot.exitDate && lot.exitDate > lastDate) lastDate = lot.exitDate;
+      });
+      result.reason = "partial";
+      result.included = false;
+      result.entrySource = entrySource(trade);
+      result.exitDate = lastDate;
+      if (counted) {
+        result.grossCents = gross;
+        result.feeCents = fees;
+        result.netCents = net;
+      }
       return result;
     }
     if (status !== "closed") {
@@ -298,6 +382,105 @@
       result.dateNote = "Exit date is before entry date. The result is still placed on the exit date.";
     }
     return result;
+  }
+
+  function realizedEvents(trade) {
+    if (!trade) return [];
+    if (exitLots(trade).length && trade.status !== "cancelled") return lotEvents(trade);
+    return [tradeResult(trade)];
+  }
+
+  function quantityTicks(value) {
+    if (value == null || value === "") return null;
+    return money.parseQtyTicks(value);
+  }
+
+  function positionAccounting(trade) {
+    const opened = quantityTicks(trade && trade.quantity);
+    let exited = 0n;
+    let bad = false;
+    exitLots(trade).forEach(function (exit) {
+      const ticks = quantityTicks(exit && exit.quantity);
+      if (ticks == null) bad = true;
+      else exited += ticks;
+    });
+    let remaining = opened == null || bad ? null : opened - exited;
+    if (!exitLots(trade).length && trade && (trade.status === "closed" || trade.status === "cancelled")) {
+      remaining = 0n;
+    }
+    const events = realizedEvents(trade).filter(function (event) { return event.included; });
+    let realizedNet = null;
+    if (events.length) {
+      realizedNet = 0n;
+      events.forEach(function (event) { realizedNet += event.netCents; });
+    }
+    let unrealizedCents = null;
+    let unrealizedReason = "no-mark";
+    let markAsOf = trade && trade.markAsOf || "";
+    if (remaining == null) unrealizedReason = "no-quantity";
+    else if (remaining <= 0n) unrealizedReason = "flat";
+    else if (!trade || trade.markPrice == null || trade.markPrice === "") unrealizedReason = "no-mark";
+    else {
+      const qty = money.scaledToNumber(remaining, 4);
+      const gross = grossPnlCents(trade.direction, effectiveEntry(trade), trade.markPrice, qty);
+      if (gross == null) unrealizedReason = "incomplete";
+      else {
+        unrealizedCents = gross;
+        unrealizedReason = "manual-mark";
+      }
+    }
+    return {
+      method: COST_METHOD,
+      remainingQty: remaining == null ? null : money.scaledToNumber(remaining, 4),
+      exitedQty: bad ? null : money.scaledToNumber(exited, 4),
+      realizedNetCents: realizedNet,
+      unrealizedCents: unrealizedCents,
+      unrealizedReason: unrealizedReason,
+      markAsOf: markAsOf,
+      partial: !!(remaining != null && remaining > 0n && exited > 0n)
+    };
+  }
+
+  function portfolioSnapshot(journal) {
+    const trades = dedupeTrades(journal && journal.trades);
+    let unrealized = null;
+    let marked = 0;
+    let openUnmarked = 0;
+    let longCost = null;
+    trades.forEach(function (trade) {
+      if (!trade || trade.status === "cancelled") return;
+      const books = positionAccounting(trade);
+      if (books.remainingQty != null && books.remainingQty > 0) {
+        if (books.unrealizedReason === "manual-mark" && typeof books.unrealizedCents === "bigint") {
+          marked += 1;
+          unrealized = (unrealized == null ? 0n : unrealized) + books.unrealizedCents;
+        } else if (trade.status === "open" || books.partial) {
+          openUnmarked += 1;
+        }
+        if (trade.direction === "long") {
+          const entry = effectiveEntry(trade);
+          const cost = basisCents(entry, books.remainingQty);
+          if (typeof cost === "bigint") longCost = (longCost == null ? 0n : longCost) + cost;
+        }
+      }
+    });
+    return {
+      portfolioValueCents: null,
+      cashCents: null,
+      unrealizedCents: unrealized,
+      markedPositions: marked,
+      openUnmarked: openUnmarked,
+      recordedLongCostCents: longCost
+    };
+  }
+
+  function tradeMatches(trade, opts) {
+    if (!trade) return false;
+    const symbol = opts && opts.symbol ? String(opts.symbol).trim().replace(/^\$/, "").toUpperCase() : "";
+    if (symbol && trade.symbol !== symbol) return false;
+    const status = opts && opts.status && opts.status !== "all" ? opts.status : "";
+    if (status && trade.status !== status) return false;
+    return true;
   }
 
   function dedupeTrades(trades) {
@@ -341,7 +524,8 @@
       incomplete: 0,
       undated: 0,
       undatedNetCents: 0n,
-      feesAssumedZero: 0
+      feesAssumedZero: 0,
+      partialOpen: 0
     };
   }
 
@@ -361,18 +545,23 @@
     const trades = dedupeTrades(journal && journal.trades);
     const dated = [];
     trades.forEach(function (trade) {
-      const result = tradeResult(trade);
-      if (result.reason === "open") metrics.excludedOpen += 1;
-      else if (result.reason === "cancelled") metrics.excludedCancelled += 1;
-      else if (result.reason === "incomplete") metrics.incomplete += 1;
-      else if (result.reason === "undated") {
-        metrics.undated += 1;
-        metrics.undatedNetCents += result.netCents;
-      } else if (result.reason === "realized") {
-        if (opts.start && result.exitDate < opts.start) return;
-        if (opts.end && result.exitDate > opts.end) return;
-        dated.push(result);
-      }
+      if (!tradeMatches(trade, opts)) return;
+      const events = realizedEvents(trade);
+      const hasLots = exitLots(trade).length > 0 && trade.status !== "cancelled";
+      if (trade.status === "open" && hasLots) metrics.partialOpen += 1;
+      events.forEach(function (result) {
+        if (result.reason === "open") metrics.excludedOpen += 1;
+        else if (result.reason === "cancelled") metrics.excludedCancelled += 1;
+        else if (result.reason === "incomplete") metrics.incomplete += 1;
+        else if (result.reason === "undated") {
+          metrics.undated += 1;
+          metrics.undatedNetCents += result.netCents;
+        } else if (result.reason === "realized") {
+          if (opts.start && result.exitDate < opts.start) return;
+          if (opts.end && result.exitDate > opts.end) return;
+          dated.push(result);
+        }
+      });
     });
     dated.sort(function (a, b) {
       if (a.exitDate !== b.exitDate) return a.exitDate < b.exitDate ? -1 : 1;
@@ -492,9 +681,13 @@
   }
 
   function tradesOnDate(journal, key) {
-    return dedupeTrades(journal && journal.trades).map(tradeResult).filter(function (result) {
-      return result.reason === "realized" && result.exitDate === key;
+    const rows = [];
+    dedupeTrades(journal && journal.trades).forEach(function (trade) {
+      realizedEvents(trade).forEach(function (result) {
+        if (result.reason === "realized" && result.exitDate === key) rows.push(result);
+      });
     });
+    return rows;
   }
 
   function dayDetail(journal, key) {
@@ -728,36 +921,47 @@
   }
 
   function tradesToCsv(journal) {
-    const header = ["id", "symbol", "name", "direction", "status", "quantity", "entry_price", "average_cost", "exit_price", "entry_date", "exit_date", "fees", "target_price", "hard_stop", "exit_reason", "strategy", "setup", "gross_pnl", "net_pnl", "return_basis", "return_percent", "counted_in_realized", "exclusion_reason", "notes"];
+    const header = ["id", "symbol", "name", "direction", "status", "quantity", "entry_price", "average_cost", "exit_price", "entry_date", "exit_date", "fees", "target_price", "hard_stop", "exit_reason", "strategy", "setup", "gross_pnl", "net_pnl", "return_basis", "return_percent", "counted_in_realized", "exclusion_reason", "notes", "remaining_qty", "manual_mark", "unrealized_manual", "unrealized_reason"];
     const lines = [csvLine(header)];
     dedupeTrades(journal && journal.trades).forEach(function (trade) {
-      const result = tradeResult(trade);
-      lines.push(csvLine([
-        trade.id,
-        trade.symbol,
-        trade.name || "",
-        trade.direction,
-        trade.status,
-        trade.quantity == null ? "" : trade.quantity,
-        trade.entryPrice == null ? "" : trade.entryPrice,
-        trade.avgCost == null ? "" : trade.avgCost,
-        trade.exitPrice == null ? "" : trade.exitPrice,
-        trade.entryDate || "",
-        trade.exitDate || "",
-        trade.fees == null ? "" : trade.fees,
-        trade.targetPrice == null ? "" : trade.targetPrice,
-        trade.hardStop == null ? "" : trade.hardStop,
-        trade.exitReason || "",
-        trade.strategy || "",
-        trade.setup || "",
-        centsCell(result.grossCents),
-        centsCell(result.netCents),
-        result.returnBasis || "",
-        result.returnPercent || "",
-        result.reason === "realized" ? "yes" : "no",
-        result.reason === "realized" ? "" : result.reason,
-        trade.notes || ""
-      ]));
+      const books = positionAccounting(trade);
+      const events = realizedEvents(trade);
+      const rows = exitLots(trade).length && trade.status !== "cancelled" ? events : [tradeResult(trade)];
+      rows.forEach(function (result) {
+        const exitPrice = result.lot
+          ? (trade.exits.find(function (exit) { return result.id.endsWith(":" + exit.id); }) || {}).price
+          : trade.exitPrice;
+        lines.push(csvLine([
+          result.lot ? result.id : trade.id,
+          trade.symbol,
+          trade.name || "",
+          trade.direction,
+          result.lot ? "closed" : trade.status,
+          result.lot ? (trade.exits.find(function (exit) { return result.id.endsWith(":" + exit.id); }) || {}).quantity : trade.quantity,
+          trade.entryPrice == null ? "" : trade.entryPrice,
+          trade.avgCost == null ? "" : trade.avgCost,
+          exitPrice == null ? "" : exitPrice,
+          trade.entryDate || "",
+          result.exitDate || trade.exitDate || "",
+          result.lot ? (result.feeCents == null ? "" : centsCell(result.feeCents)) : (trade.fees == null ? "" : trade.fees),
+          trade.targetPrice == null ? "" : trade.targetPrice,
+          trade.hardStop == null ? "" : trade.hardStop,
+          trade.exitReason || "",
+          trade.strategy || "",
+          trade.setup || "",
+          centsCell(result.grossCents),
+          centsCell(result.netCents),
+          result.returnBasis || "",
+          result.returnPercent || "",
+          result.reason === "realized" ? "yes" : "no",
+          result.reason === "realized" ? "" : result.reason,
+          trade.notes || "",
+          books.remainingQty == null ? "" : books.remainingQty,
+          trade.markPrice == null ? "" : trade.markPrice,
+          centsCell(books.unrealizedCents),
+          books.unrealizedReason || ""
+        ]));
+      });
     });
     return lines.join("\n") + "\n";
   }
@@ -766,8 +970,9 @@
     const header = ["date", "closed_trade_net", "closed_trade_count", "manual_pnl", "manual_note", "account_adjustment", "adjustment_note", "sources"];
     const keys = new Set(Object.keys(journal && journal.days || {}));
     dedupeTrades(journal && journal.trades).forEach(function (trade) {
-      const result = tradeResult(trade);
-      if (result.reason === "realized") keys.add(result.exitDate);
+      realizedEvents(trade).forEach(function (result) {
+        if (result.reason === "realized") keys.add(result.exitDate);
+      });
     });
     const lines = [csvLine(header)];
     Array.from(keys).filter(parseDateKey).sort().forEach(function (key) {
@@ -795,6 +1000,7 @@
     TRADE_DATE_CONVENTION: TRADE_DATE_CONVENTION,
     SHORT_RETURN_BASIS: SHORT_RETURN_BASIS,
     LONG_RETURN_BASIS: LONG_RETURN_BASIS,
+    COST_METHOD: COST_METHOD,
     STATUS_HELP: STATUS_HELP,
     EXIT_REASON_HELP: EXIT_REASON_HELP,
     CHECKLIST_HELP: CHECKLIST_HELP,
@@ -816,6 +1022,9 @@
     longCostBasisCents: longCostBasisCents,
     shortProceedsBasisCents: shortProceedsBasisCents,
     tradeResult: tradeResult,
+    realizedEvents: realizedEvents,
+    positionAccounting: positionAccounting,
+    portfolioSnapshot: portfolioSnapshot,
     dedupeTrades: dedupeTrades,
     analyze: analyze,
     monthSummary: monthSummary,

@@ -13,11 +13,16 @@
       const dark = next === "dark";
       btn.setAttribute("aria-pressed", dark ? "true" : "false");
       btn.setAttribute("aria-label", dark ? "Dark mode, switch to light mode" : "Light mode, switch to dark mode");
-      btn.textContent = dark ? "Dark" : "Light";
+      btn.setAttribute("title", dark ? "Switch to light mode" : "Switch to dark mode");
+      const label = document.getElementById("themeToggleLabel");
+      if (label) label.textContent = dark ? "Dark" : "Light";
     }
     if (options && options.persist) {
       try { localStorage.setItem(KEY, next); } catch (err) { /* private mode can block storage */ }
     }
+    try {
+      document.dispatchEvent(new CustomEvent("ladder-theme", { detail: next }));
+    } catch (err) { /* document can be missing in tests */ }
   };
 
   function savedTheme() {
