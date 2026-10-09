@@ -997,7 +997,34 @@
 
   function axisMoney(cents) {
     const n = Math.round(Number(cents));
-    return ST.formatCents(BigInt(n), "plain");
+    const big = BigInt(n);
+    if (big % 100n === 0n) {
+      const neg = big < 0n;
+      const dollars = (neg ? -big : big) / 100n;
+      const text = dollars.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return (neg ? "-" : "") + "$" + text;
+    }
+    return ST.formatCents(big, "plain");
+  }
+
+  function niceAxis(minCents, maxCents) {
+    let lo = minCents;
+    let hi = maxCents;
+    if (lo > 0) lo = 0;
+    if (hi < 0) hi = 0;
+    const span = Math.max(hi - lo, 100);
+    const roughDollars = Math.max((span / 4) / 100, 1);
+    const pow = Math.pow(10, Math.floor(Math.log10(roughDollars)));
+    const err = roughDollars / pow;
+    const factor = err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1;
+    const step = Math.max(100, Math.round(factor * pow * 100));
+    const start = Math.floor(lo / step) * step;
+    let end = Math.ceil(hi / step) * step;
+    if (end <= start) end = start + step;
+    const count = Math.round((end - start) / step);
+    const ticks = [];
+    for (let i = 0; i <= count; i++) ticks.push(start + i * step);
+    return { min: start, max: end, ticks: ticks };
   }
 
   function barSvg(points, title) {
@@ -1109,11 +1136,10 @@
       if (value < min) min = value;
       if (value > max) max = value;
     });
-    const pad = (max - min) * 0.12 || 100;
-    min -= pad;
-    max += pad;
-    if (min > 0) min = 0;
-    if (max < 0) max = 0;
+    const head = Math.max((max - min) * 0.08, 100);
+    const axis = niceAxis(min - head, max + head);
+    min = axis.min;
+    max = axis.max;
     const span = (max - min) || 1;
     function xOf(index) {
       return left + (index * (width - left - right)) / (curve.length - 1);
@@ -1129,12 +1155,14 @@
     }).join(" ");
     const area = xOf(0).toFixed(1) + "," + zeroY.toFixed(1) + " " + coords + " " + xOf(curve.length - 1).toFixed(1) + "," + zeroY.toFixed(1);
     let grid = "";
-    for (let i = 0; i <= 4; i++) {
-      const value = min + (span * i) / 4;
+    axis.ticks.forEach(function (value) {
       const y = yOf(value);
-      grid += '<line class="grid" x1="' + left + '" y1="' + y.toFixed(1) + '" x2="' + (width - right) + '" y2="' + y.toFixed(1) + '"></line>';
+      if (value !== 0) {
+        grid += '<line class="grid" x1="' + left + '" y1="' + y.toFixed(1) + '" x2="' + (width - right) + '" y2="' + y.toFixed(1) + '"></line>';
+      }
       grid += '<text class="axis" x="' + (left - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + ST.escapeHtml(axisMoney(value)) + "</text>";
-    }
+    });
+    grid += '<line class="zero" x1="' + left + '" y1="' + zeroY.toFixed(1) + '" x2="' + (width - right) + '" y2="' + zeroY.toFixed(1) + '"></line>';
     const labelCount = curve.length > 12 ? 5 : curve.length > 6 ? 4 : curve.length;
     const labelIndexes = [];
     for (let step = 0; step < labelCount; step++) {
