@@ -19,6 +19,7 @@
     overviewTo: "",
     analyticsSymbol: "",
     analyticsStatus: "all",
+    analyticsPane: "overview",
     rangePreset: "ytd",
     rangeFrom: "",
     rangeTo: ""
@@ -82,6 +83,13 @@
       if (range.from != null) state.overviewFrom = range.from;
       if (range.to != null) state.overviewTo = range.to;
       state.tab = "dashboard";
+      refresh();
+    },
+    setAnalyticsPane: function (pane) {
+      const allowed = { overview: true, symbol: true, strategy: true, time: true };
+      if (!allowed[pane]) return;
+      state.analyticsPane = pane;
+      state.tab = "analytics";
       refresh();
     },
     setAnalytics: function (query) {

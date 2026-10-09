@@ -27,7 +27,7 @@
 <body>
   <div class="app">
     <header class="topbar">
-      <div>
+      <div class="brand-row">
         <div class="brand">
           <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
             <line x1="32" y1="8" x2="32" y2="56" stroke-width="5"/>
@@ -38,9 +38,6 @@
           </svg>
           <h1>Ladder</h1>
         </div>
-        <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
-      </div>
-      <div class="header-actions">
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
           <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
             <circle cx="12" cy="12" r="4"></circle>
@@ -52,11 +49,13 @@
           <span class="visually-hidden" id="themeToggleLabel">Dark</span>
         </button>
       </div>
+      <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
     </header>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
     <div class="shell">
+      <div class="tab-shell">
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Overview</button>
         <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets">Markets</button>
@@ -66,6 +65,7 @@
         <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
         <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
       </nav>
+      </div>
 
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
@@ -90,7 +90,7 @@
                 <input id="overviewTo" type="date" />
               </label>
             </div>
-            <p class="hint">Realized figures use recorded exits and fees. Unrealized figures are an estimate from a price you type, or N/A when that price is missing. Planned risk uses the stop you wrote down. It is not a live stop, and it is not a claim the market hit it.</p>
+            <p class="hint">Recorded exits only. A price you type is an estimate. A stop is a plan, not a market fill.</p>
             <div id="dashboardBody"></div>
             <div class="button-row shortcuts">
               <button type="button" id="dashPositions">Open positions</button>
@@ -105,7 +105,7 @@
             <div class="panel-head">
               <h2>Markets</h2>
             </div>
-            <p class="hint">The chart is display-only. Its prices are not written into trades, marks, or profit and loss.</p>
+            <p class="hint">Display only. Chart prices are not saved into trades.</p>
             <form id="symbolForm" class="symbol-bar">
               <label>Symbol
                 <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
@@ -154,7 +154,7 @@
               <h2>Trades</h2>
               <button type="button" id="addTradeBtn" class="primary">Log trade</button>
             </div>
-            <p class="hint">Each card is a trade you recorded. A target or hard stop is a plan, not an exit. Open covers a planned position that is not realized.</p>
+            <p class="hint">A target or stop is a plan you wrote down, not a fill.</p>
             <details class="legend">
               <summary>What the statuses mean</summary>
               <ul>
@@ -219,7 +219,13 @@
             <div class="panel-head">
               <h2>Analytics</h2>
             </div>
-            <p class="hint">Every metric below uses the same closed trades: a recorded exit price, quantity, and exit date in the range. Open trades are not estimates of profit.</p>
+            <p class="hint">Closed trades in the range only. Open trades are not counted as profit.</p>
+            <div class="seg" role="group" aria-label="Analytics breakdown">
+              <button type="button" data-pane="overview" aria-pressed="true">Overview</button>
+              <button type="button" data-pane="symbol" aria-pressed="false">Symbol</button>
+              <button type="button" data-pane="strategy" aria-pressed="false">Strategy</button>
+              <button type="button" data-pane="time" aria-pressed="false">Time</button>
+            </div>
             <div class="range-bar">
               <label>Range
                 <select id="rangePreset">
@@ -257,7 +263,7 @@
             <div class="panel-head">
               <h2>Risk</h2>
             </div>
-            <p class="hint" id="riskDisclaimer">Planning math from the numbers you type. It is not financial advice and does not place an order. A stop does not guarantee the maximum loss. Actual losses can exceed the planned risk because of gaps, slippage, fees, and execution. This calculator does not change a risk limit unless you check remember.</p>
+            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss. Remember saves only account size and risk percent.</p>
             <div class="row-2">
               <label>Account size ($)
                 <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
@@ -325,6 +331,7 @@
     </div>
 
     <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
+    <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
   </div>
 
   <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">

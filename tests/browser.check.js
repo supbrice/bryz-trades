@@ -262,6 +262,34 @@ async function assertThemeIcon(page, theme) {
   assert(visible, "theme text label stays visually hidden");
 }
 
+async function assertMobileChrome(page, label) {
+  const width = page.viewportSize().width;
+  const info = await page.evaluate(function () {
+    const shell = document.querySelector(".tab-shell");
+    const box = shell.getBoundingClientRect();
+    const analytics = document.getElementById("tab-analytics");
+    const brand = document.querySelector(".brand-row").getBoundingClientRect();
+    const toggle = document.getElementById("themeToggle").getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(document.querySelector(".app")).paddingBottom);
+    return {
+      position: getComputedStyle(shell).position,
+      bottom: box.bottom,
+      height: window.innerHeight,
+      pad: pad,
+      navH: box.height,
+      labelClipped: analytics.scrollWidth > analytics.clientWidth + 1,
+      sameRow: Math.abs(toggle.top - brand.top) < 12
+    };
+  });
+  assert(info.sameRow, label + " theme toggle shares the header row");
+  assert(!info.labelClipped, label + " Analytics label is clipped");
+  if (width < 900) {
+    assert(info.position === "fixed", label + " nav position " + info.position);
+    assert(Math.abs(info.bottom - info.height) < 2, label + " nav bottom " + info.bottom + " vs " + info.height);
+    assert(info.pad + 1 >= info.navH, label + " content pad " + info.pad + " is under nav " + info.navH);
+  }
+}
+
 async function noOverflow(page, label) {
   const info = await page.evaluate(function () {
     return {
@@ -306,6 +334,7 @@ async function runFlow(browser, url, today, viewport, label) {
   page.on("dialog", function (dialog) { dialog.accept(); });
   try {
     assert((await page.locator("h1").innerText()) === "Ladder", "title");
+    await assertMobileChrome(page, label);
     await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "SOFI");
     await shows(page, "#positionsList", "Open — not realized");
@@ -821,7 +850,8 @@ async function runPagesBase(browser, url) {
 }
 
 async function shotView(page, file) {
-  await page.screenshot({ path: path.join(shotDir, file), fullPage: true });
+  const full = page.viewportSize().width >= 900;
+  await page.screenshot({ path: path.join(shotDir, file), fullPage: full });
 }
 
 async function runShots(browser, url, journal) {
@@ -844,6 +874,10 @@ async function runShots(browser, url, journal) {
       assert((await page.locator("html").getAttribute("data-theme")) === "dark", "shot theme");
       await page.getByRole("tab", { name: "Overview" }).click();
       await shows(page, "#dashRealized", "+$");
+      await page.locator("#dashboardBody .hit").first().dispatchEvent("pointerover");
+      await shows(page, "#chartTip", "$");
+      await page.locator("#dashboardBody .hit").first().focus();
+      await shows(page, "#chartTip", "$");
       await noOverflow(page, size[0] + " overview");
       await shotView(page, "investor_overview_" + size[0] + ".png");
       for (const section of sections) {

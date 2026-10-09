@@ -294,6 +294,58 @@ test("risk calculator sizes a long and a short and refuses a stop on the wrong s
   assert.equal(calc.positionRisk({ accountSize: 10000, riskPercent: 1, entryPrice: "", stopPrice: 48, direction: "long" }).ok, false);
 });
 
+test("eight-trade hand calculation covers fees, partials, breakeven, and planned risk", () => {
+  // Formulas, integer cents, half away from zero:
+  // long gross = (exit − entry) × qty; short gross = (entry − exit) × qty; net = gross − fees.
+  // Win rate = wins / (wins + losses + breakevens). Net zero is a breakeven, not a win.
+  // Profit factor = gross profit / gross loss. N/A when gross loss is 0.
+  // Max drawdown is the largest peak-to-trough of cumulative closed-trade P/L, peak starting at 0.
+  // Planned risk sums remaining shares × |entry − stop| for open trades whose stop is on the correct side.
+  // Each dated exit lot counts as its own closed result. Average cost, not FIFO.
+  const journal = {
+    settings: { accountSize: 10000 },
+    trades: [
+      closed({ id: "a", symbol: "AAA", quantity: 10, entryPrice: 100, exitPrice: 112, fees: 2, exitDate: "2026-01-10", strategy: "breakout" }),
+      closed({ id: "b", symbol: "BBB", direction: "short", quantity: 5, entryPrice: 50, exitPrice: 40, fees: 0, exitDate: "2026-01-20", strategy: "fade" }),
+      closed({ id: "c", symbol: "CCC", quantity: 8, entryPrice: 25, exitPrice: 20, fees: 1.25, exitDate: "2026-02-02", strategy: "breakout" }),
+      closed({ id: "d", symbol: "DDD", quantity: 3, entryPrice: 15, exitPrice: 15, fees: 0, exitDate: "2026-02-10", strategy: "" }),
+      {
+        id: "e", symbol: "EEE", direction: "long", status: "open", quantity: 10, entryPrice: 80, hardStop: 75, fees: 0,
+        exits: [
+          { id: "e1", quantity: 4, price: 90, date: "2026-03-01", fees: 1 },
+          { id: "e2", quantity: 2, price: 70, date: "2026-03-04", fees: 0 }
+        ]
+      },
+      closed({ id: "f", symbol: "FFF", direction: "short", quantity: 2, entryPrice: 60, exitPrice: 66, fees: 0.5, exitDate: "2026-03-15", strategy: "fade" }),
+      { id: "g", symbol: "GGG", direction: "long", status: "open", quantity: 10, entryPrice: 100, hardStop: 95, fees: 0 },
+      { id: "h", symbol: "HHH", direction: "long", status: "open", quantity: 6, entryPrice: 12, hardStop: null, fees: 0 }
+    ],
+    days: { "2026-01-10": { entryType: "manual", manualPnl: 500, adjustment: -25, note: "not trading p/l" } }
+  };
+  const metrics = calc.analyze(journal);
+  assert.equal(metrics.realizedNetCents, 13325n);
+  assert.equal(metrics.tradeCount, 7);
+  assert.equal(metrics.wins, 3);
+  assert.equal(metrics.losses, 3);
+  assert.equal(metrics.breakevens, 1);
+  assert.equal(metrics.winRate, "42.9%");
+  assert.equal(metrics.avgWinCents, 6900n);
+  assert.equal(metrics.avgLossCents, -2458n);
+  assert.equal(metrics.grossProfitCents, 20700n);
+  assert.equal(metrics.grossLossCents, 7375n);
+  assert.equal(metrics.profitFactor, "2.81");
+  assert.equal(metrics.maxDrawdownCents, 4125n);
+  assert.equal(metrics.byDirection.find((row) => row.label === "Long").netCents, 9575n);
+  assert.equal(metrics.byDirection.find((row) => row.label === "Short").netCents, 3750n);
+  const planned = calc.plannedOpenRisk(journal);
+  assert.equal(planned.cents, 7000n);
+  assert.equal(planned.included, 2);
+  assert.equal(planned.skipped, 1);
+  assert.equal(planned.equityPercent, "0.70%");
+  const onlyOpen = calc.plannedOpenRisk({ trades: [journal.trades[7]] });
+  assert.equal(onlyOpen.cents, null);
+});
+
 test("hand-calculated realized results, direction split, and planned open risk", () => {
   const journal = {
     settings: { accountSize: 10000 },

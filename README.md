@@ -110,7 +110,24 @@ Manual day entries are the old hand-typed daily results, kept and labeled `manua
 
 The cumulative curve is closed-trade P/L by exit date. Same-day trades are summed before the peak is updated. Drawdown is how far that cumulative total sits below its previous peak, starting from zero. It is not account equity. Deposits, withdrawals, open positions, and margin are not inside it.
 
-Gross profit is the sum of winning nets. Gross loss is the sum of losing nets as a positive amount. Profit factor is gross profit ÷ gross loss. A winning or losing trade is classified on net, after fees.
+Gross profit is the sum of winning nets. Gross loss is the sum of losing nets as a positive amount. Profit factor is gross profit ÷ gross loss. A winning or losing trade is classified on net, after fees. A net of exactly zero is a breakeven: it counts in the win-rate denominator and in neither gross profit nor gross loss.
+
+Each dated exit lot is its own closed result. A position that is only partly sold contributes one result per lot, and the unsold shares stay open.
+
+Worked example, eight trades, all in cents:
+
+| Trade | Result |
+| --- | --- |
+| Long 10 @ 100, exit 112, fee $2 | net +11800 |
+| Short 5 @ 50, exit 40, fee $0 | net +5000 |
+| Long 8 @ 25, exit 20, fee $1.25 | net −4125 |
+| Long 3 @ 15, exit 15, fee $0 | net 0, breakeven |
+| Long 10 @ 80, sell 4 @ 90 fee $1 and 2 @ 70 fee $0, 4 still open, stop 75 | lots +3900 and −2000; planned risk on the rest 2000 |
+| Short 2 @ 60, exit 66, fee $0.50 | net −1250 |
+| Open long 10 @ 100, stop 95 | not realized; planned risk 5000 |
+| Open long 6 @ 12, no stop | not realized; left out of planned risk |
+
+Realized net +13325. Three wins, three losses, one breakeven, so the win rate is 3/7 = 42.9%. Average win 6900. Average loss −2458. Profit factor 20700/7375 = 2.81. Cumulative peak is +16800 after the second win; the Feb 2 loss pulls the curve to +12675, a drawdown of 4125, which is the max. Planned risk on the two open stops is 7000. A manual day on the same date is not in any of those figures.
 
 ## Risk calculator
 
