@@ -18,12 +18,12 @@
     open: {
       label: "Open",
       summary: "Open — not realized",
-      detail: "This trade is open in your journal. It is excluded from realized profit and loss. The target and hard stop are plans you recorded, not exits, and Ladder does not check the market."
+      detail: "This trade is open in your journal. It is excluded from realized profit and loss. The target and hard stop are plans you recorded, not exits, and Bryz Trades does not check the market."
     },
     closed: {
       label: "Closed",
       summary: "Closed — recorded exit",
-      detail: "You recorded this trade as closed. Realized profit and loss uses the exit price, quantity, fees, and exit date you entered. Ladder does not know whether a target or stop was reached in the market."
+      detail: "You recorded this trade as closed. Realized profit and loss uses the exit price, quantity, fees, and exit date you entered. Bryz Trades does not know whether a target or stop was reached in the market."
     },
     cancelled: {
       label: "Cancelled",
@@ -34,8 +34,8 @@
 
   const EXIT_REASON_HELP = {
     "": "No exit reason recorded.",
-    target: "You recorded this exit as your planned target. That note is yours. Ladder did not verify a market price.",
-    stop: "You recorded this exit as your planned stop. That note is yours. Ladder did not verify a market price.",
+    target: "You recorded this exit as your planned target. That note is yours. Bryz Trades did not verify a market price.",
+    stop: "You recorded this exit as your planned stop. That note is yours. Bryz Trades did not verify a market price.",
     other: "You recorded an exit reason other than the planned target or stop."
   };
 
@@ -63,7 +63,7 @@
     avgTrade: "Average net profit and loss per counted closed trade. N/A when there are no counted trades.",
     plannedRisk: "Sum of remaining shares times the distance from the recorded entry to the recorded hard stop, for open positions where the stop is on the correct side. Incomplete plans are skipped. This is not a live stop and does not check the market.",
     unrealized: "Unrealized profit and loss uses only a mark price you type, times the shares still open, at the same average entry used for realized exits. N/A when you have not entered a mark. Chart prices are never used.",
-    portfolioValue: "N/A. Ladder does not infer portfolio market value, cash, or holdings value from the chart or from trade history."
+    portfolioValue: "N/A. Bryz Trades does not infer portfolio market value, cash, or holdings value from the chart or from trade history."
   };
 
   const RISK_DISCLAIMER = "This is a planning estimate, not financial advice, and it does not place an order. Actual losses can be larger than the planned risk because of gaps, slippage, fees, and execution.";

@@ -1,10 +1,10 @@
-# Ladder
+# Bryz Trades
 
 A local-first trading journal for any ticker. Static site, no build step, no account, and no broker connection. The GitHub Pages address stays `sofi-levels-card`.
 
-Ladder records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
+Bryz Trades records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
 
-The only external script is TradingView’s official chart embed, loaded when Markets is open. It is not an API key, and Ladder does not read prices out of it. Performance charts on Overview and Analytics are drawn from the journal in the page. They are not TradingView, and they do not use a chart library.
+The only external script is TradingView’s official chart embed, loaded when Markets is open. It is not an API key, and Bryz Trades does not read prices out of it. Performance charts on Overview and Analytics are drawn from the journal in the page. They are not TradingView, and they do not use a chart library.
 
 ## Screens
 
@@ -24,7 +24,7 @@ Trades filter by status, symbol, direction, strategy, and date. A date filter ke
 
 Markets loads TradingView’s Advanced Chart from `https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js` only, and the watchlist tape from `https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js` only. Nothing else is loaded from a CDN. No chart library is vendored.
 
-The price chart is created when Markets is showing. Period buttons are 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, and MAX. The widget theme follows Ladder’s light or dark theme. The chart is attributed to TradingView, and the data may be delayed. The embed runs in a sandboxed frame so it cannot read or clear the journal in this page’s storage. If the script is blocked or does not paint within 8 seconds, the page shows a fallback and leaves your trades alone. Chart prices are never copied into an entry, an exit, or a mark.
+The price chart is created when Markets is showing. Period buttons are 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, and MAX. The widget theme follows the light or dark theme. The chart is attributed to TradingView, and the data may be delayed. The embed runs in a sandboxed frame so it cannot read or clear the journal in this page’s storage. If the script is blocked or does not paint within 8 seconds, the page shows a fallback and leaves your trades alone. Chart prices are never copied into an entry, an exit, or a mark.
 
 Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity.
 
@@ -33,7 +33,7 @@ Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or
 These describe the journal, not the market.
 
 - **Open — not realized.** The trade is still in the journal. It is excluded from realized profit and loss. The target and hard stop are plans.
-- **Closed — recorded exit.** Realized results use the exit price, share count, fees, and exit date you entered. Ladder does not know whether a target or stop was reached in the market.
+- **Closed — recorded exit.** Realized results use the exit price, share count, fees, and exit date you entered. Bryz Trades does not know whether a target or stop was reached in the market.
 - **Cancelled — not realized.** Excluded from realized profit and loss.
 
 An exit reason of “recorded as target exit” or “recorded as stop exit” is your note. It is not a market check.
@@ -64,7 +64,7 @@ Only closed trades with an entry, an exit price, a share count, and an exit date
 
 Long return uses **initial entry cost**: `Quantity × entry price` (the price used for P/L). `Return = Net P/L ÷ that cost`.
 
-Short return uses **short-sale proceeds**: `Quantity × entry price`. `Return = Net P/L ÷ those proceeds`. This is not a margin return. Ladder does not assume a margin rate, because none is recorded. The long-cost label is not reused for shorts.
+Short return uses **short-sale proceeds**: `Quantity × entry price`. `Return = Net P/L ÷ those proceeds`. This is not a margin return. Bryz Trades does not assume a margin rate, because none is recorded. The long-cost label is not reused for shorts.
 
 If the share count or the entry price is zero, or the basis rounds to zero, the return is N/A.
 
@@ -137,15 +137,15 @@ Per share, a long uses `entry − stop` and the stop must be below the entry. A 
 
 The result is a planning estimate. It is not financial advice and it does not place an order. A stop does not guarantee the maximum loss. Actual losses can be larger because of gaps, slippage, fees, and execution. An optional target shows potential reward and reward-to-risk when it sits on the profitable side of the entry. A missing or unusable target does not change the size. Remembering account size and risk percent merges those two fields into the saved settings. It does not replace the watchlist or the selected symbol, and it does not change a risk limit on its own.
 
-Planned risk on Overview is the sum, for open positions, of remaining shares times the distance from the recorded entry to the recorded hard stop, when the stop is on the correct side. Positions missing an entry, a stop, or a share count are skipped and labeled. That figure is a plan. It is not a live stop, and Ladder does not check whether the market traded there. If you have saved an account size, the page also shows that sum as a percent of it.
+Planned risk on Overview is the sum, for open positions, of remaining shares times the distance from the recorded entry to the recorded hard stop, when the stop is on the correct side. Positions missing an entry, a stop, or a share count are skipped and labeled. That figure is a plan. It is not a live stop, and Bryz Trades does not check whether the market traded there. If you have saved an account size, the page also shows that sum as a percent of it.
 
 ## Backup
 
-Settings exports a JSON file with `schemaVersion: 3` and `app: "ladder"`, plus CSV files for trades and daily summaries. Import checks the file first. Schema 2 files are upgraded on import. A malformed file, a duplicate id inside the file, or a schema newer than 3 is rejected and the saved journal is left as it was. Merge skips ids you already have unless you choose overwrite, and it skips closed trades that look the same unless you choose to import them. Manual days on the same date are kept or replaced, never summed. Replace asks you to confirm, and writes a pre-import backup in this browser before it swaps the journal. If that backup cannot be stored, nothing is changed.
+Settings exports a JSON file with `schemaVersion: 3` and `app: "ladder"`, plus CSV files for trades and daily summaries. The downloaded names are `bryz-trades-….json`, `bryz-trades-trades-….csv`, and `bryz-trades-days-….csv`. A file saved earlier as `ladder-….json` still imports. Import reads the file contents, not the file name. Import checks the file first. Schema 2 files are upgraded on import. A malformed file, a duplicate id inside the file, or a schema newer than 3 is rejected and the saved journal is left as it was. Merge skips ids you already have unless you choose overwrite, and it skips closed trades that look the same unless you choose to import them. Manual days on the same date are kept or replaced, never summed. Replace asks you to confirm, and writes a pre-import backup in this browser before it swaps the journal. If that backup cannot be stored, nothing is changed.
 
 The current journal lives in this browser’s local storage (`ladder-journal-v3`). A schema 2 journal under `ladder-journal-v2` is copied forward once. The version 2 text is left in place, and a pre-migration backup is stored under `ladder-journal-premigration-v3` before the new key is written. If that backup cannot be stored, the upgraded journal is not written. Version 1 and the original SOFI card still migrate, with their own pre-migration backup, and are not deleted.
 
-Another device, another browser, or a private window does not have the journal. There is no cloud sync. Private browsing may drop it when the window closes. Clearing site data deletes it. Export a file first if the numbers matter. Ladder does not send the journal anywhere unless you move an exported file yourself. No API key and no backend are required.
+Another device, another browser, or a private window does not have the journal. There is no cloud sync. Private browsing may drop it when the window closes. Clearing site data deletes it. Export a file first if the numbers matter. Bryz Trades does not send the journal anywhere unless you move an exported file yourself. No API key and no backend are required.
 
 ## Tests
 

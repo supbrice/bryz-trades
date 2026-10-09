@@ -324,7 +324,7 @@
   }
 
   function cleanJournal(raw) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("That file is not a Ladder backup.");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("That file is not a Bryz Trades backup.");
     if (raw.schemaVersion !== 2 && raw.schemaVersion !== 3) {
       throw new Error("That file uses schema version " + (raw.schemaVersion == null ? "(missing)" : raw.schemaVersion) + ", which this page does not read. Nothing was changed.");
     }
@@ -635,7 +635,7 @@
     if (kind === "v2" || kind === "v3") return cleanJournal(parsed);
     if (kind === "v1") return migrateV1(parsed);
     if (kind === "sofi") return migrateSofiCard(parsed);
-    throw new Error("That file is not a Ladder backup. Nothing was changed.");
+    throw new Error("That file is not a Bryz Trades backup. Nothing was changed.");
   }
 
   function planImport(current, textValue) {

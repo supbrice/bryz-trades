@@ -18,9 +18,12 @@
       if (meta) meta.setAttribute("content", theme === "light" ? "#F3F6F3" : "#090B0A");
     })();
   </script>
-  <meta name="description" content="Ladder — a local trading journal. Not financial advice." />
-  <meta name="apple-mobile-web-app-title" content="Ladder" />
-  <title>Ladder</title>
+  <meta name="description" content="Bryz Trades — a local trading journal. Not financial advice." />
+  <meta name="application-name" content="Bryz Trades" />
+  <meta name="apple-mobile-web-app-title" content="Bryz Trades" />
+  <meta property="og:title" content="Bryz Trades" />
+  <meta property="og:description" content="Bryz Trades — a local trading journal. Not financial advice." />
+  <title>Bryz Trades</title>
   <link rel="icon" href="assets/ladder-logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -36,7 +39,7 @@
             <line x1="22" y1="40" x2="42" y2="40" stroke-width="4"/>
             <line x1="25" y1="52" x2="39" y2="52" stroke-width="4"/>
           </svg>
-          <h1>Ladder</h1>
+          <h1>Bryz Trades</h1>
         </div>
         <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
           <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
@@ -130,7 +133,7 @@
               <button type="button" data-period="MAX">MAX</button>
             </div>
             <div id="chartMount" class="chart-mount" role="region" aria-label="Price chart"></div>
-            <p class="chart-attrib">Chart by <a href="https://www.tradingview.com/" rel="noopener noreferrer" target="_blank">TradingView</a>. Market data may be delayed. Ladder does not copy chart prices into trade records, and it does not calculate profit from the chart.</p>
+            <p class="chart-attrib">Chart by <a href="https://www.tradingview.com/" rel="noopener noreferrer" target="_blank">TradingView</a>. Market data may be delayed. Bryz Trades does not copy chart prices into trade records, and it does not calculate profit from the chart.</p>
           </div>
           <div class="panel" id="symbolDetail">
             <div class="panel-head">
@@ -159,7 +162,7 @@
               <summary>What the statuses mean</summary>
               <ul>
                 <li><strong>Open — not realized.</strong> Still in the journal. Excluded from realized profit and loss.</li>
-                <li><strong>Closed — recorded exit.</strong> Uses the exit price, fees, and exit date you entered. Ladder does not check the market.</li>
+                <li><strong>Closed — recorded exit.</strong> Uses the exit price, fees, and exit date you entered. Bryz Trades does not check the market.</li>
                 <li><strong>Cancelled — not realized.</strong> Excluded from realized profit and loss.</li>
               </ul>
             </details>
@@ -305,7 +308,7 @@
               <h2>Settings and backup</h2>
             </div>
             <h3 class="section-title">Backup</h3>
-            <p class="hint">The file stays on this device unless you move it yourself. Ladder does not upload it.</p>
+            <p class="hint">The file stays on this device unless you move it yourself. Bryz Trades does not upload it.</p>
             <div class="button-row">
               <button type="button" id="exportJsonBtn" class="primary">Export JSON</button>
               <button type="button" id="exportTradesCsvBtn">Trades CSV</button>
@@ -322,7 +325,7 @@
               <p>The journal is stored in this browser’s local storage on this device. It is not an account, and it is not sent to a server.</p>
               <p>Another browser, another device, or a private-browsing window has its own empty copy. Private browsing may delete the journal when the window closes.</p>
               <p>Clearing site data, cookies, or history for this site deletes the journal. Export a JSON backup first if the records matter.</p>
-              <p>A failed save or a failed import leaves the previous copy in place. Before an upgrade or import, Ladder also keeps a backup copy in this browser.</p>
+              <p>A failed save or a failed import leaves the previous copy in place. Before an upgrade or import, Bryz Trades also keeps a backup copy in this browser.</p>
               <p id="schemaLine">Schema version 3. Older journals in this browser are copied forward. The previous copy is kept.</p>
             </div>
           </div>
@@ -499,7 +502,7 @@
         <h2 id="dayDialogTitle">Day</h2>
         <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
       </div>
-      <p class="dialog-lead">Closed trades and manual entries stay on separate lines. Ladder does not add them together.</p>
+      <p class="dialog-lead">Closed trades and manual entries stay on separate lines. Bryz Trades does not add them together.</p>
       <div id="dayTrades" class="result-box"></div>
       <h3 class="section-title">Manual entry</h3>
       <p class="hint">A hand-typed day result from before trade-level tracking, or an account note you want to keep. It is labeled manual and is not a closed trade.</p>
@@ -565,7 +568,7 @@
     </form>
   </dialog>
 
-  <noscript><p class="footer-note">Ladder needs JavaScript. It still stays on this device — there is no account.</p></noscript>
+  <noscript><p class="footer-note">Bryz Trades needs JavaScript. It still stays on this device — there is no account.</p></noscript>
   <script src="js/money.js"></script>
   <script src="js/calc.js"></script>
   <script src="js/schema.js"></script>

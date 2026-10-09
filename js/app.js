@@ -239,15 +239,15 @@
       return { ok: true };
     },
     exportJson: function () {
-      download("ladder-" + stamp() + ".json", ST.exportJson(state.data), "application/json");
+      download("bryz-trades-" + stamp() + ".json", ST.exportJson(state.data), "application/json");
       ST.showBanner("JSON backup downloaded. It stays on this device unless you move the file.");
     },
     exportTradesCsv: function () {
-      download("ladder-trades-" + stamp() + ".csv", ST.tradesToCsv(state.data), "text/csv");
+      download("bryz-trades-trades-" + stamp() + ".csv", ST.tradesToCsv(state.data), "text/csv");
       ST.showBanner("Trades CSV downloaded.");
     },
     exportDaysCsv: function () {
-      download("ladder-days-" + stamp() + ".csv", ST.dailyToCsv(state.data), "text/csv");
+      download("bryz-trades-days-" + stamp() + ".csv", ST.dailyToCsv(state.data), "text/csv");
       ST.showBanner("Daily summary CSV downloaded.");
     },
     importText: function (text) {

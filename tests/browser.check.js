@@ -333,7 +333,8 @@ async function runFlow(browser, url, today, viewport, label) {
   page.setDefaultTimeout(15000);
   page.on("dialog", function (dialog) { dialog.accept(); });
   try {
-    assert((await page.locator("h1").innerText()) === "Ladder", "title");
+    assert((await page.locator("h1").innerText()) === "Bryz Trades", "title");
+    assert((await page.title()) === "Bryz Trades", "document title");
     await assertMobileChrome(page, label);
     await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "SOFI");
@@ -808,6 +809,8 @@ async function runPreserve(browser, url) {
   const page = await context.newPage();
   try {
     await page.goto(url, { waitUntil: "load" });
+    assert((await page.locator("h1").innerText()) === "Bryz Trades", "rename title");
+    assert((await page.title()) === "Bryz Trades", "rename document title");
     await page.getByRole("tab", { name: "Trades" }).click();
     await shows(page, "#positionsList", "IBM");
     const stored = await page.evaluate(function () {
@@ -835,7 +838,8 @@ async function runPagesBase(browser, url) {
   const opened = await openPage(browser, url + "sofi-levels-card/", { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
   const page = opened.page;
   try {
-    assert((await page.locator("h1").innerText()) === "Ladder", "pages base title");
+    assert((await page.locator("h1").innerText()) === "Bryz Trades", "pages base title");
+    assert((await page.title()) === "Bryz Trades", "pages base document title");
     const sheet = await page.evaluate(function () {
       const link = document.querySelector("link[rel='stylesheet']");
       return link ? link.getAttribute("href") : "";
