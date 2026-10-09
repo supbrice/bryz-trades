@@ -1,11 +1,13 @@
 /* Dev-only browser checks. The site does not load this file. */
 const http = require("node:http");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const shotDir = "/opt/cursor/artifacts/screenshots";
+const fullShotDir = path.join(os.tmpdir(), "ladder-browser-shots");
 const views = [
   ["dashboard", "Dashboard"],
   ["positions", "Positions"],
@@ -205,6 +207,45 @@ async function shows(page, selector, text) {
   assert(body.includes(text), selector + " should include " + text + " but was:\n" + body);
 }
 
+async function assertThemeIcon(page, theme) {
+  const dark = theme === "dark";
+  const button = page.locator("#themeToggle");
+  const moon = button.locator(".theme-icon-moon");
+  const sun = button.locator(".theme-icon-sun");
+  const moonBox = await moon.boundingBox();
+  const sunBox = await sun.boundingBox();
+  const box = await button.boundingBox();
+  assert(box && box.width >= 72 && box.height >= 44, "theme button size " + JSON.stringify(box));
+  if (dark) {
+    assert(moonBox && moonBox.width > 8 && moonBox.height > 8, "crescent visible in dark mode");
+    assert(sunBox == null, "sun hidden in dark mode");
+  } else {
+    assert(sunBox && sunBox.width > 8 && sunBox.height > 8, "sun visible in light mode");
+    assert(moonBox == null, "crescent hidden in light mode");
+  }
+  const label = await button.getAttribute("aria-label");
+  const title = await button.getAttribute("title");
+  const pressed = await button.getAttribute("aria-pressed");
+  const hidden = await page.locator("#themeToggleLabel").innerText();
+  if (dark) {
+    assert(label === "Dark mode, switch to light mode", "aria-label " + label);
+    assert(title === "Switch to light mode", "title " + title);
+    assert(pressed === "true", "aria-pressed dark");
+    assert(hidden === "Dark", "hidden label " + hidden);
+  } else {
+    assert(label === "Light mode, switch to dark mode", "aria-label " + label);
+    assert(title === "Switch to dark mode", "title " + title);
+    assert(pressed === "false", "aria-pressed light");
+    assert(hidden === "Light", "hidden label " + hidden);
+  }
+  const visible = await button.evaluate(function (btn) {
+    const text = window.getComputedStyle(btn.querySelector(".visually-hidden"));
+    const clipped = text.position === "absolute" && (text.clip !== "auto" || text.width === "1px");
+    return btn.innerText.replace(/\s+/g, " ").trim() === "" || clipped;
+  });
+  assert(visible, "theme text label stays visually hidden");
+}
+
 async function noOverflow(page, label) {
   const info = await page.evaluate(function () {
     return {
@@ -217,6 +258,7 @@ async function noOverflow(page, label) {
 
 async function main() {
   fs.mkdirSync(shotDir, { recursive: true });
+  fs.mkdirSync(fullShotDir, { recursive: true });
   const server = await serve();
   const url = "http://127.0.0.1:" + server.address().port + "/";
   const browser = await chromium.launch({ headless: true });
@@ -313,10 +355,19 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.getByRole("button", { name: "Calculate size" }).click();
     await shows(page, "#riskResult", "above the entry");
 
-    await page.locator("#themeToggle").click();
+    await assertThemeIcon(page, "dark");
+    await page.locator("#themeToggle").focus();
+    await page.keyboard.press("Enter");
     assert((await page.locator("html").getAttribute("data-theme")) === "light", label + " theme");
     const saved = await page.evaluate(function () { return localStorage.getItem("stock-tracker-theme"); });
     assert(saved === "light", "theme storage");
+    await assertThemeIcon(page, "light");
+    await page.locator("#themeToggle").focus();
+    await page.keyboard.press(" ");
+    assert((await page.locator("html").getAttribute("data-theme")) === "dark", label + " keyboard back to dark");
+    await assertThemeIcon(page, "dark");
+    await page.locator("#themeToggle").click();
+    assert((await page.locator("html").getAttribute("data-theme")) === "light", label + " click to light");
     for (const view of views) {
       await page.getByRole("tab", { name: view[1] }).click();
       await noOverflow(page, label + " " + view[0] + " light");
@@ -492,12 +543,16 @@ async function runShots(browser, url, journal) {
       try {
         const themeAttr = await page.locator("html").getAttribute("data-theme");
         assert(themeAttr === theme, "screenshot theme " + theme);
+        await assertThemeIcon(page, theme);
+        await page.locator("header.topbar").screenshot({
+          path: path.join(shotDir, "theme_header_" + size[0] + "_" + theme + ".png")
+        });
         for (const view of views) {
           await page.getByRole("tab", { name: view[1] }).click();
           await page.waitForSelector("#view-" + view[0] + ":not([hidden])");
           await noOverflow(page, size[0] + " " + theme + " " + view[0]);
           await page.screenshot({
-            path: path.join(shotDir, view[0] + "_" + size[0] + "_" + theme + ".png"),
+            path: path.join(fullShotDir, view[0] + "_" + size[0] + "_" + theme + ".png"),
             fullPage: true
           });
         }
