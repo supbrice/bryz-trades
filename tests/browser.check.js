@@ -849,7 +849,57 @@ async function runPagesBase(browser, url) {
   }
 }
 
+async function assertRecentTradesFit(page) {
+  const bad = await page.evaluate(function () {
+    const card = document.querySelector("#dashboardBody .side-card");
+    if (!card) return "missing recent trades card";
+    const box = card.getBoundingClientRect();
+    const cells = card.querySelectorAll(".trade-table td");
+    if (!cells.length) return "recent trades has no rows";
+    for (let i = 0; i < cells.length; i++) {
+      const node = cells[i];
+      const rect = node.getBoundingClientRect();
+      const label = (node.getAttribute("data-label") || "") + " " + node.textContent.trim();
+      if (rect.right > box.right + 1 || rect.left < box.left - 1) return "outside card " + label;
+      if (node.scrollWidth > node.clientWidth + 2) return "clipped " + label;
+    }
+    const text = card.innerText;
+    if (!/\$\d+\.\d{2}/.test(text)) return "money value is not fully present";
+    if (text.indexOf("Exit") === -1 && text.indexOf("N/A") === -1) return "exit column missing";
+    return "";
+  });
+  assert(!bad, "recent trades " + bad);
+}
+
+async function assertOnlyActiveTab(page, activeId) {
+  const info = await page.evaluate(function (id) {
+    function paint(node) {
+      const style = getComputedStyle(node);
+      return {
+        active: node.classList.contains("active"),
+        bg: style.backgroundColor,
+        color: style.color,
+        shadow: style.boxShadow
+      };
+    }
+    return {
+      activeIds: Array.from(document.querySelectorAll(".tabs button.active")).map(function (node) { return node.id; }),
+      risk: paint(document.getElementById("tab-risk")),
+      markets: paint(document.getElementById("tab-markets")),
+      current: paint(document.getElementById(id))
+    };
+  }, activeId);
+  assert(info.activeIds.length === 1 && info.activeIds[0] === activeId, "selected tabs " + info.activeIds.join(","));
+  assert(info.risk.bg === info.markets.bg && info.risk.color === info.markets.color, "inactive tab still looks selected");
+  assert(info.current.bg !== info.markets.bg, "active tab has no selected fill");
+}
+
 async function shotView(page, file) {
+  const only = process.env.LADDER_SHOTS;
+  if (only && only.split(",").indexOf(file) === -1) return;
+  await page.evaluate(function () {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  });
   const full = page.viewportSize().width >= 900;
   await page.screenshot({ path: path.join(shotDir, file), fullPage: full });
 }
@@ -884,6 +934,7 @@ async function runShots(browser, url, journal) {
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       });
       await noOverflow(page, size[0] + " overview");
+      await assertRecentTradesFit(page);
       await shotView(page, "investor_overview_" + size[0] + ".png");
       for (const section of sections) {
         await page.getByRole("tab", { name: section[1] }).click();
@@ -905,6 +956,28 @@ async function runShots(browser, url, journal) {
           await shows(page, "#riskResult", "50");
         }
         await noOverflow(page, size[0] + " " + section[0]);
+        if (section[0] === "analytics") {
+          await assertOnlyActiveTab(page, "tab-analytics");
+          await page.evaluate(function () { document.getElementById("tab-risk").focus({ focusVisible: true }); });
+          const focused = await page.evaluate(function () {
+            const risk = document.getElementById("tab-risk");
+            const markets = document.getElementById("tab-markets");
+            const riskStyle = getComputedStyle(risk);
+            const marketsStyle = getComputedStyle(markets);
+            return {
+              visible: risk.matches(":focus-visible"),
+              riskBg: riskStyle.backgroundColor,
+              marketsBg: marketsStyle.backgroundColor,
+              analyticsBg: getComputedStyle(document.getElementById("tab-analytics")).backgroundColor,
+              riskShadow: riskStyle.boxShadow,
+              marketsShadow: marketsStyle.boxShadow
+            };
+          });
+          assert(focused.visible, "Risk focus is not visible");
+          assert(focused.riskBg === focused.marketsBg, "focused Risk uses the selected fill");
+          assert(focused.analyticsBg !== focused.riskBg, "Analytics lost the selected fill");
+          assert(focused.riskShadow !== "none" && focused.riskShadow !== focused.marketsShadow, "focus ring matches an idle tab");
+        }
         await shotView(page, section[2] + "_" + size[0] + ".png");
       }
       if (page.errors.length) throw new Error(page.errors.join("\n"));
