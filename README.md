@@ -1,4 +1,4 @@
-# Stock Tracker
+# Ladder
 
 A personal stock tracker for daily use. Static site, no build step, no account, and no broker connection. The GitHub Pages address stays `sofi-levels-card`.
 

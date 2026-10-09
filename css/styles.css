@@ -163,6 +163,20 @@ textarea:focus-visible {
   margin-bottom: 0.85rem;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: block;
+  color: var(--text);
+}
+
 h1 {
   margin: 0;
   font-size: 1.45rem;
@@ -636,6 +650,7 @@ details .hint { margin-top: 0.35rem; }
 }
 
 @media (min-width: 900px) {
+  .logo { width: 32px; height: 32px; }
   .app { padding: 1.4rem 1.25rem 1.6rem; }
   .views {
     display: grid;
