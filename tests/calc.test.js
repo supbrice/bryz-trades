@@ -7,7 +7,7 @@ const calc = require("../js/calc.js");
 function closed(overrides) {
   return Object.assign({
     id: "t1",
-    symbol: "SOFI",
+    symbol: "AAPL",
     direction: "long",
     status: "closed",
     quantity: 5,
@@ -245,7 +245,7 @@ test("date keys do not move across a timezone boundary", () => {
     const bounds = calc.monthBounds(2026, 0);
     if (!calc.inDateRange("2026-01-01", bounds.start, bounds.end)) process.exit(4);
     if (calc.inDateRange("2025-12-31", bounds.start, bounds.end)) process.exit(5);
-    const summary = calc.monthSummary({ trades: [{ id: "a", symbol: "SOFI", direction: "long", status: "closed", quantity: 1, entryPrice: 10, exitPrice: 11, exitDate: "2026-01-01", fees: 0 }], days: {} }, 2026, 0, new Date(2026, 0, 31));
+    const summary = calc.monthSummary({ trades: [{ id: "a", symbol: "AAPL", direction: "long", status: "closed", quantity: 1, entryPrice: 10, exitPrice: 11, exitDate: "2026-01-01", fees: 0 }], days: {} }, 2026, 0, new Date(2026, 0, 31));
     if (summary.tradeCents !== 100n) process.exit(6);
   `;
   ["Pacific/Kiritimati", "Pacific/Honolulu", "UTC", "America/New_York"].forEach((tz) => {
@@ -480,4 +480,74 @@ test("a legacy closed trade is unchanged when it has no exit lots", () => {
   assert.equal(calc.tradeResult(trade).netCents, 900n);
   assert.equal(calc.positionAccounting(trade).unrealizedReason, "flat");
   assert.equal(calc.analyze({ trades: [trade] }).realizedNetCents, 900n);
+});
+
+test("performance ranges are trailing windows through today", () => {
+  const today = new Date(2026, 9, 10);
+  assert.deepEqual(calc.rangeForPreset("1w", today), { start: "2026-10-04", end: "2026-10-10", label: "1 week" });
+  assert.deepEqual(calc.rangeForPreset("1m", today), { start: "2026-09-10", end: "2026-10-10", label: "1 month" });
+  assert.deepEqual(calc.rangeForPreset("3m", today), { start: "2026-07-10", end: "2026-10-10", label: "3 months" });
+  assert.deepEqual(calc.rangeForPreset("1y", today), { start: "2025-10-10", end: "2026-10-10", label: "1 year" });
+  assert.equal(calc.rangeForPreset("ytd", today).start, "2026-01-01");
+  assert.equal(calc.rangeForPreset("ytd", today).end, "2026-10-10");
+  assert.equal(calc.rangeForPreset("all", today).start, null);
+  assert.equal(calc.rangeForPreset("1m", new Date(2026, 2, 31)).start, "2026-02-28");
+});
+
+test("account return uses a saved account size and stays blank without one", () => {
+  assert.equal(calc.accountReturn(800n, null), null);
+  assert.equal(calc.accountReturn(800n, 0), null);
+  assert.equal(calc.accountReturn(null, 10000), null);
+  assert.equal(calc.accountReturn(800n, 10000), "0.08%");
+  assert.equal(calc.accountReturn(-800n, 10000), "-0.08%");
+});
+
+test("call and put use a 100x multiplier and equity does not", () => {
+  const equity = { id: "eq", symbol: "AAPL", direction: "long", status: "closed", quantity: 1, entryPrice: 2, exitPrice: 3, fees: 0, exitDate: "2026-01-02" };
+  const call = Object.assign({}, equity, { id: "call", assetType: "call" });
+  const put = Object.assign({}, equity, { id: "put", assetType: "put", direction: "long", entryPrice: 2, exitPrice: 1 });
+  const shortCall = Object.assign({}, equity, { id: "sc", assetType: "call", direction: "short", entryPrice: 3, exitPrice: 2 });
+  assert.equal(calc.assetTypeOf(equity), "equity");
+  assert.equal(calc.assetMultiplier(equity), 1n);
+  assert.equal(calc.tradeResult(equity).netCents, 100n);
+  assert.equal(calc.tradeResult(call).netCents, 10000n);
+  assert.equal(calc.tradeResult(call).returnPercent, calc.tradeResult(equity).returnPercent);
+  assert.equal(calc.tradeResult(put).netCents, -10000n);
+  assert.equal(calc.tradeResult(shortCall).netCents, 10000n);
+  assert.equal(calc.grossPnlCents("long", 2, 3, 1), 100n);
+  assert.equal(calc.grossPnlCents("long", 2, 3, 1, 100), 10000n);
+  const openCall = { id: "oc", symbol: "QQQ", assetType: "call", direction: "long", status: "open", quantity: 2, entryPrice: 1.5, hardStop: 1, markPrice: 2 };
+  assert.equal(calc.positionAccounting(openCall).unrealizedCents, 10000n);
+  const planned = calc.plannedOpenRisk({ trades: [openCall] });
+  assert.equal(planned.cents, 10000n);
+  const capital = calc.activeCapitalAtRisk({ trades: [openCall, equity] });
+  assert.equal(capital.included, 1);
+  assert.equal(capital.cents, 30000n);
+  assert.equal(calc.activeCapitalAtRisk({ trades: [equity] }).empty, true);
+  assert.equal(calc.statusBadge(call).label, "CLOSED - WIN");
+  assert.equal(calc.statusBadge(put).label, "CLOSED - LOSS");
+  assert.equal(calc.statusBadge({ id: "flat", symbol: "AMD", direction: "long", status: "closed", quantity: 1, entryPrice: 5, exitPrice: 5, fees: 0, exitDate: "2026-01-02" }).label, "CLOSED - BREAKEVEN");
+  assert.equal(calc.statusBadge(openCall).label, "OPEN");
+  const partial = { id: "part", symbol: "NVDA", direction: "long", status: "open", quantity: 10, entryPrice: 20, exits: [{ id: "e1", quantity: 4, price: 22, date: "2026-01-02", fees: 0, reason: "" }] };
+  assert.equal(calc.statusBadge(partial).label, "OPEN - PARTIAL");
+  assert.match(calc.statusBadge(partial).note, /partially exited/);
+  const partialCall = { id: "pc", symbol: "SPY", assetType: "put", direction: "long", status: "open", quantity: 2, entryPrice: 1, exits: [{ id: "x", quantity: 1, price: 1.5, date: "2026-01-02", fees: 0, reason: "" }] };
+  assert.equal(calc.realizedEvents(partialCall)[0].netCents, 5000n);
+  assert.equal(calc.statusBadge(partialCall).label, "OPEN - PARTIAL");
+});
+
+test("expectancy uses closed trades and stays empty without enough of them", () => {
+  const empty = calc.expectancy(calc.analyze({ trades: [] }));
+  assert.equal(empty.ready, false);
+  assert.equal(empty.rr, null);
+  const journal = { trades: [
+    { id: "w", symbol: "AAPL", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 110, fees: 0, exitDate: "2026-01-02" },
+    { id: "l", symbol: "MSFT", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 95, fees: 0, exitDate: "2026-01-03" },
+    { id: "o", symbol: "NVDA", direction: "long", status: "open", quantity: 5, entryPrice: 10 }
+  ] };
+  const stats = calc.expectancy(calc.analyze(journal));
+  assert.equal(stats.ready, true);
+  assert.equal(stats.rr, "2.00");
+  assert.equal(stats.perTradeCents, 2500n);
+  assert.equal(stats.tradeCount, 2);
 });

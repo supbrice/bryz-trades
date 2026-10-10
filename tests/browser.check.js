@@ -10,7 +10,7 @@ const shotDir = "/opt/cursor/artifacts/screenshots";
 const fullShotDir = path.join(os.tmpdir(), "ladder-browser-shots");
 const views = [
   ["dashboard", "Overview"],
-  ["markets", "Markets"],
+  ["markets", "Symbols"],
   ["positions", "Trades"],
   ["risk", "Risk"],
   ["analytics", "Analytics"],
@@ -57,7 +57,7 @@ function ymd(date) {
 function serve() {
   const server = http.createServer(function (req, res) {
     const urlPath = decodeURIComponent(req.url.split("?")[0]);
-    const prefix = "/sofi-levels-card";
+    const prefix = "/bryz-trades";
     let stripped = urlPath;
     if (stripped === prefix || stripped === prefix + "/") stripped = "/";
     else if (stripped.startsWith(prefix + "/")) stripped = stripped.slice(prefix.length);
@@ -78,6 +78,7 @@ function serve() {
         : file.endsWith(".js") ? "text/javascript"
         : file.endsWith(".svg") ? "image/svg+xml"
         : file.endsWith(".png") ? "image/png"
+        : file.endsWith(".woff2") ? "font/woff2"
         : "text/html";
       res.writeHead(200, { "content-type": type });
       res.end(data);
@@ -97,9 +98,9 @@ function demoJournal(now) {
     settings: { accountSize: 25000, riskPercent: 1 },
     trades: [
       {
-        id: "sofi",
-        symbol: "SOFI",
-        name: "SoFi",
+        id: "shop",
+        symbol: "SHOP",
+        name: "Shopify",
         direction: "long",
         status: "open",
         quantity: 40,
@@ -227,22 +228,32 @@ async function openPage(browser, url, viewport, theme, journal) {
   }, { theme: theme, journal: journal ? JSON.stringify(journal) : "", v1: "" });
   const page = await context.newPage();
   const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
   page.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
+    errors.push(String(err && err.message || err));
   });
   page.on("console", function (msg) {
     if (msg.type() !== "error") return;
-    const text = msg.text();
-    if (/tradingview|sandboxed|net::ERR|Failed to load resource/i.test(text)) return;
-    errors.push("console: " + text);
+    errors.push("console: " + msg.text());
   });
   await page.goto(url, { waitUntil: "load" });
   await page.waitForSelector("h1");
   if (errors.length) throw new Error(errors.join("\n"));
   page.errors = errors;
   return { context: context, page: page };
+}
+
+function watchOrigin(page, errors, origin) {
+  page.on("request", function (request) {
+    const raw = request.url();
+    if (/^(data|blob|about):/i.test(raw)) return;
+    let requestOrigin = "";
+    try { requestOrigin = new URL(raw).origin; } catch (err) {
+      errors.push("unreadable request " + raw);
+      return;
+    }
+    if (requestOrigin !== origin) errors.push("outside origin " + raw);
+  });
 }
 
 async function shows(page, selector, text) {
@@ -310,11 +321,47 @@ async function assertMobileChrome(page, label) {
   });
   assert(info.sameRow, label + " theme toggle shares the header row");
   assert(!info.labelClipped, label + " Analytics label is clipped");
-  if (width < 900) {
+  if (width < 700) {
     assert(info.position === "fixed", label + " nav position " + info.position);
     assert(Math.abs(info.bottom - info.height) < 2, label + " nav bottom " + info.bottom + " vs " + info.height);
     assert(info.pad + 1 >= info.navH, label + " content pad " + info.pad + " is under nav " + info.navH);
+  } else if (width < 1100) {
+    assert(info.position !== "fixed", label + " tablet rail is not a bottom bar");
   }
+}
+
+async function assertMainLayout(page, label) {
+  const width = page.viewportSize().width;
+  if (width < 700) {
+    const overlap = await page.evaluate(function () {
+      function box(id) {
+        const node = document.getElementById(id);
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      }
+      const button = box("topLogTrade");
+      const field = box("overviewTo");
+      const hits = !(button.right < field.left || button.left > field.right || button.bottom < field.top || button.top > field.bottom);
+      return { hits: hits, buttonTop: button.top, height: window.innerHeight };
+    });
+    assert(!overlap.hits, label + " Log trade overlaps the To field");
+    assert(overlap.buttonTop > overlap.height * 0.55, label + " Log trade is not a bottom action");
+    return;
+  }
+  const info = await page.evaluate(function () {
+    const side = document.querySelector(".sidebar").getBoundingClientRect().width;
+    const main = document.querySelector("main.views").getBoundingClientRect().width;
+    const cards = Array.from(document.querySelectorAll("#dashboardBody .primary-metrics > .stat")).map(function (node) {
+      return Math.round(node.getBoundingClientRect().width);
+    });
+    return { side: side, main: Math.round(main), cards: cards, width: window.innerWidth };
+  });
+  const room = info.width - info.side;
+  assert(info.main >= room * 0.7, label + " main " + info.main + "px is under 70% of " + Math.round(room) + "px");
+  assert(info.cards.length >= 4, label + " expected 4 KPI cards, saw " + info.cards.length);
+  info.cards.forEach(function (card, index) {
+    assert(card >= 180, label + " KPI " + index + " is " + card + "px");
+  });
 }
 
 async function noOverflow(page, label) {
@@ -331,7 +378,7 @@ async function main() {
   fs.mkdirSync(shotDir, { recursive: true });
   fs.mkdirSync(fullShotDir, { recursive: true });
   const server = await serve();
-  const url = "http://127.0.0.1:" + server.address().port + "/";
+  const url = "http://127.0.0.1:" + server.address().port + "/bryz-trades/";
   const browser = await chromium.launch({ headless: true });
   const now = new Date();
   const today = ymd(now);
@@ -339,18 +386,150 @@ async function main() {
     await runFlow(browser, url, today, { width: 390, height: 844 }, "phone");
     await runFlow(browser, url, today, { width: 768, height: 1024 }, "tablet");
     await runFlow(browser, url, today, { width: 1440, height: 900 }, "desktop");
+    await runPremium(browser, url, today, { width: 390, height: 844 }, "phone");
+    await runPremium(browser, url, today, { width: 768, height: 1024 }, "tablet");
+    await runPremium(browser, url, today, { width: 1440, height: 900 }, "desktop");
     await runMigration(browser, url);
     await runImports(browser, url, today);
     await runLarge(browser, url, today);
     await runUniversal(browser, url, today);
-    await runChart(browser, url);
+    await runSymbols(browser, url);
     await runPreserve(browser, url);
     await runPagesBase(browser, url);
+    await runTerminal(browser, url, today);
     await runShots(browser, url, demoJournal(now));
+    await runProShots(browser, url, proJournal(now));
     console.log("browser checks passed");
   } finally {
     await browser.close();
     await new Promise(function (resolve) { server.close(resolve); });
+  }
+}
+
+async function runPremium(browser, url, today, viewport, label) {
+  const context = await browser.newContext({ viewport: viewport, acceptDownloads: true });
+  await context.addInitScript(function () {
+    if (localStorage.getItem("ladder-refresh-ready") === "1") return;
+    localStorage.clear();
+    localStorage.setItem("stock-tracker-theme", "dark");
+  });
+  const page = await context.newPage();
+  const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
+  page.on("pageerror", function (err) { errors.push(String(err && err.message || err)); });
+  page.on("console", function (msg) {
+    if (msg.type() !== "error") return;
+    errors.push("console: " + msg.text());
+  });
+  page.on("dialog", function (dialog) { dialog.accept(); });
+  page.setDefaultTimeout(15000);
+  try {
+    await page.goto(url, { waitUntil: "load" });
+    await page.waitForSelector("#quickSymbol");
+    await shows(page, "#upcomingCard", "Nothing upcoming");
+    assert(await page.locator("#dashReturn").count() === 0, label + " return hidden");
+    const presets = await page.locator("#overviewPreset option").evaluateAll(function (nodes) {
+      return nodes.map(function (node) { return node.value; }).join(",");
+    });
+    assert(presets === "1w,1m,3m,ytd,1y,all,custom", label + " ranges " + presets);
+    await page.keyboard.press("n");
+    const focused = await page.evaluate(function () { return document.activeElement && document.activeElement.id; });
+    assert(focused === "quickSymbol", label + " N focused " + focused);
+
+    await page.locator("#quickSymbol").fill("??");
+    await page.locator("#quickQty").fill("1");
+    await page.locator("#quickPrice").fill("10");
+    await page.locator("#quickSave").click();
+    await shows(page, "#quickError", "AAPL");
+
+    await page.locator("#quickSymbol").fill("PART");
+    await page.locator("#quickSide").selectOption("long");
+    await page.locator("#quickQty").fill("10");
+    await page.locator("#quickPrice").fill("20");
+    await page.locator("#quickDate").fill(today);
+    await page.locator("#quickPrice").press("Enter");
+    await shows(page, "#upcomingCard", "PART");
+    await shows(page, "#upcomingCard", "stop not recorded");
+    assert(await page.locator("#quickSide").inputValue() === "long", label + " side stays long");
+
+    await page.evaluate(function () { localStorage.setItem("ladder-refresh-ready", "1"); });
+    await page.reload({ waitUntil: "load" });
+    await page.waitForSelector("#upcomingCard");
+    await shows(page, "#upcomingCard", "PART");
+
+    await page.getByRole("tab", { name: "Trades" }).click();
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^PART/ }) }).getByRole("button", { name: "Edit" }).click();
+    await page.locator("#partialDetails summary").click();
+    await page.locator("#addExitBtn").click();
+    await page.locator(".exit-qty").fill("4");
+    await page.locator(".exit-price").fill("22");
+    await page.locator(".exit-date").fill(today);
+    await page.locator(".exit-fees").fill("0");
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "partially exited");
+    await shows(page, "#positionsList", "+$8.00");
+
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await page.locator("#quickSymbol").fill("DONE");
+    await page.locator("#quickSide").selectOption("short");
+    await page.locator("#quickQty").fill("1");
+    await page.locator("#quickPrice").fill("5");
+    await page.locator("#quickDate").fill(today);
+    await page.locator("#quickSave").click();
+    assert(await page.locator("#quickSide").inputValue() === "short", label + " last side");
+    await page.getByRole("tab", { name: "Trades" }).click();
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^DONE/ }) }).getByRole("button", { name: "Close" }).click();
+    await page.locator("#fieldExit").fill("4");
+    await page.locator("#fieldExitDate").fill(today);
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "Closed — recorded exit");
+
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("1w");
+    await shows(page, "#dashboardBody", "1 week");
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("all");
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("custom");
+    await shows(page, "#dashboardBody", "Choose a start");
+    await page.locator("#overviewFrom").fill(today);
+    await page.locator("#overviewTo").fill(today);
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("ytd");
+
+    await page.getByRole("tab", { name: "Analytics" }).click();
+    await shows(page, "#metric-realized", "+$9.00");
+    await shows(page, "#analyticsBody", "not account equity");
+
+    await page.getByRole("tab", { name: "Risk" }).click();
+    await page.locator("#riskAccount").fill("10000");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("50");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskRemember").check();
+    await page.getByRole("button", { name: "Calculate size" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await shows(page, "#dashReturn", "%");
+    await shows(page, "#dashReturn", "account");
+
+    await page.getByRole("tab", { name: "Settings" }).click();
+    const jsonDownload = page.waitForEvent("download");
+    await page.locator("#exportJsonBtn").click();
+    const jsonFile = await jsonDownload;
+    assert(jsonFile.suggestedFilename().indexOf("bryz-trades-") === 0, jsonFile.suggestedFilename());
+    const csvDownload = page.waitForEvent("download");
+    await page.locator("#exportTradesCsvBtn").click();
+    const csvFile = await csvDownload;
+    assert(csvFile.suggestedFilename().indexOf("bryz-trades-trades-") === 0, csvFile.suggestedFilename());
+
+    assert(await page.locator("iframe").count() === 0, label + " frames");
+    assert(await page.locator("script[src^='http']").count() === 0, label + " outside scripts");
+    await noOverflow(page, label + " premium");
+    if (errors.length) throw new Error(errors.join("\n"));
+    console.log("premium passed", label);
+  } finally {
+    await context.close();
   }
 }
 
@@ -363,10 +542,13 @@ async function runFlow(browser, url, today, viewport, label) {
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "title");
     assert((await page.title()) === "Bryz Trades", "document title");
     await assertBrand(page);
+    await assertMainLayout(page, label);
     await assertMobileChrome(page, label);
+    await shows(page, "#dashboardBody", "No trades recorded yet");
+    await shows(page, "#upcomingCard", "Nothing upcoming");
+    assert(await page.locator("#dashReturn").count() === 0, "return without account size");
     await page.getByRole("tab", { name: "Trades" }).click();
-    await shows(page, "#positionsList", "SOFI");
-    await shows(page, "#positionsList", "Open — not realized");
+    await shows(page, "#positionsList", "No trades yet");
     await page.locator("#addTradeBtn").click();
     await page.locator("#fieldSymbol").fill("TEST");
     await page.locator("#fieldStatus").selectOption("closed");
@@ -408,7 +590,8 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$4.00");
     const openText = await page.locator("#dashOpen").innerText();
-    assert(openText.includes("2") || openText.includes("3"), "open count should include BIG and SOFI, was " + openText);
+    assert(openText.includes("1"), "open count should be the one open trade, was " + openText);
+    assert(!openText.includes("SHOP") && !openText.includes("SOFI"), "no seeded ticker in " + openText);
 
     await page.getByRole("tab", { name: "Analytics" }).click();
     await shows(page, "#analyticsBody", "+$4.00");
@@ -479,16 +662,15 @@ async function runMigration(browser, url) {
     localStorage.clear();
     localStorage.setItem("stock-tracker-v1", JSON.stringify({
       version: 1,
-      tickers: [{ id: "sof", symbol: "SOFI", shares: 10, avgCost: 18, notes: "from before", getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "filled", fillPrice: 18, close: 16 }],
-      days: { "2026-01-05": { pnl: 25.5, note: "old manual", breakdown: [{ tickerId: "sof", symbol: "SOFI", amount: 25.5 }] } }
+      tickers: [{ id: "sof", symbol: "AAPL", shares: 10, avgCost: 18, notes: "from before", getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "filled", fillPrice: 18, close: 16 }],
+      days: { "2026-01-05": { pnl: 25.5, note: "old manual", breakdown: [{ tickerId: "sof", symbol: "AAPL", amount: 25.5 }] } }
     }));
   });
   const page = await context.newPage();
   const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
   page.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
+    errors.push(String(err && err.message || err));
   });
   await page.goto(url, { waitUntil: "load" });
   await page.getByRole("tab", { name: "Trades" }).click();
@@ -648,7 +830,7 @@ async function runUniversal(browser, url, today) {
     assert(stored.v2 === raw, "v2 copy survives the upgrade");
     assert(stored.v3.schemaVersion === 3, "journal is schema 3");
     assert(stored.backup && stored.backup.includes("before-schema-v3-migration"), "v3 premigration backup");
-    assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SOFI" && trade.status === "open"; }), "SOFI survived");
+    assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SHOP" && trade.status === "open"; }), "open symbol survived");
 
     await page.getByRole("tab", { name: "Trades" }).click();
     await page.locator("#addTradeBtn").click();
@@ -688,7 +870,7 @@ async function runUniversal(browser, url, today) {
     await shows(page, "#positionsList", "AAPL");
     const filtered = await page.locator("#positionsList").innerText();
     assert(!filtered.includes("MSFT"), "symbol filter hid MSFT");
-    assert(!filtered.includes("SOFI"), "symbol filter hid SOFI");
+    assert(!filtered.includes("SHOP"), "symbol filter hid SHOP");
     await page.locator("#positionSymbol").fill("");
 
     await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^NVDA/ }) }).getByRole("button", { name: "Delete" }).click();
@@ -707,97 +889,31 @@ async function runUniversal(browser, url, today) {
   }
 }
 
-async function readChartConfig(page) {
-  const raw = await page.locator("#chartMount").getAttribute("data-widget-config");
-  assert(raw, "chart config missing");
-  return JSON.parse(raw);
-}
-
-async function runChart(browser, url) {
-  const opened = await openPage(browser, url, { width: 390, height: 844 }, "light", demoJournal(new Date()));
+async function runSymbols(browser, url) {
+  const opened = await openPage(browser, url, { width: 1440, height: 900 }, "dark", demoJournal(new Date()));
   const page = opened.page;
   page.setDefaultTimeout(15000);
   try {
-    await page.getByRole("tab", { name: "Markets" }).click();
-    await page.waitForSelector("#chartMount[data-widget-config]");
-    let config = await readChartConfig(page);
-    assert(config.symbol === "NASDAQ:SOFI", "default chart symbol " + config.symbol);
-    assert(config.range === "6M", "default range");
-    assert(config.theme === "light", "chart follows light theme");
-    const scriptSrc = await page.locator("#chartMount").getAttribute("data-widget-src");
-    assert(scriptSrc === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", scriptSrc);
-    const periods = [
-      ["1D", "1D"],
-      ["5D", "5D"],
-      ["1M", "1M"],
-      ["6M", "6M"],
-      ["YTD", "YTD"],
-      ["1Y", "12M"],
-      ["5Y", "60M"],
-      ["MAX", "ALL"]
-    ];
-    for (const pair of periods) {
-      await page.locator("[data-period=\"" + pair[0] + "\"]").click();
-      config = await readChartConfig(page);
-      assert(config.range === pair[1], pair[0] + " range was " + config.range);
-      assert(config.theme === "light", "period kept theme");
-    }
-    await page.locator("#symbolSearch").fill("NVDA");
-    await page.locator("#symbolExchange").fill("NASDAQ");
+    await page.getByRole("tab", { name: "Symbols" }).click();
+    await shows(page, "#watchlistBody", "SHOP");
+    await shows(page, "#watchlistBody", "AAPL");
+    await shows(page, "#symbolDetailBody", "SHOP");
+    await shows(page, "#symbolDetailBody", "Win rate");
+    await shows(page, "#symbolDetailBody", "Closed P/L");
+    await shows(page, "#symbolDetailBody", "$16.92");
+    await shows(page, "#symbolDetailBody", "$22.00");
+    await page.locator("#symbolSearch").fill("AAPL");
     await page.locator("#symbolApply").click();
-    config = await readChartConfig(page);
-    assert(config.symbol === "NASDAQ:NVDA", "switched symbol " + config.symbol);
-    await page.locator("#themeToggle").click();
-    config = await readChartConfig(page);
-    assert(config.theme === "dark", "chart follows dark theme");
-    await page.waitForFunction(function () {
-      const el = document.getElementById("chartMount");
-      const widgetState = el && el.getAttribute("data-widget-state");
-      return widgetState === "loaded" || widgetState === "fallback";
-    }, null, { timeout: 12000 });
-    const state = await page.locator("#chartMount").getAttribute("data-widget-state");
-    if (state === "loaded") console.log("tradingview chart loaded");
-    else console.log("tradingview unreachable from this environment; fallback shown and widget config was still checked");
+    await shows(page, "#symbolDetailName", "AAPL");
+    await shows(page, "#symbolRealized", "+$");
+    assert(await page.locator("iframe").count() === 0, "no frames");
+    assert(await page.locator("script[src^='http']").count() === 0, "no outside scripts");
     const journalAfter = await page.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
-    assert(journalAfter && journalAfter.includes("\"symbol\":\"SOFI\""), "chart did not clear the journal");
-    console.log("chart config passed");
+    assert(journalAfter && journalAfter.includes("\"symbol\":\"SHOP\""), "symbol view changed the journal");
+    if (page.errors.length) throw new Error(page.errors.join("\n"));
+    console.log("symbols view passed");
   } finally {
     await opened.context.close();
-  }
-
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(function () {
-    localStorage.clear();
-    localStorage.setItem("stock-tracker-theme", "dark");
-  });
-  await context.route("**://*.tradingview.com/**", function (route) { route.abort(); });
-  await context.route("**://s3.tradingview.com/**", function (route) { route.abort(); });
-  const blocked = await context.newPage();
-  const errors = [];
-  blocked.on("pageerror", function (err) {
-    const message = String(err && err.message || err);
-    if (/tradingview|sandboxed and lacks the 'allow-same-origin' flag/i.test(message)) return;
-    errors.push(message);
-  });
-  try {
-    await blocked.goto(url, { waitUntil: "load" });
-    await blocked.getByRole("tab", { name: "Markets" }).click();
-    await blocked.waitForSelector("#chartMount .chart-fallback", { timeout: 12000 });
-    const fallback = await blocked.locator("#chartMount").innerText();
-    assert(fallback.includes("Chart unavailable"), fallback);
-    assert(fallback.includes("No price was filled in"), fallback);
-    const config = JSON.parse(await blocked.locator("#chartMount").getAttribute("data-widget-config"));
-    assert(config.symbol === "NASDAQ:SOFI", "blocked config " + config.symbol);
-    assert(config.theme === "dark", "blocked theme");
-    const src = await blocked.locator("#chartMount").getAttribute("data-widget-src");
-    assert(src === "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js", src);
-    assert(await blocked.locator("#chartMount script").count() === 0, "failed chart does not leave the embed in the page");
-    const journal = await blocked.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
-    assert(journal && !journal.includes("\"markPrice\":1"), "no fabricated mark");
-    if (errors.length) throw new Error(errors.join("\n"));
-    console.log("chart failure state passed");
-  } finally {
-    await context.close();
   }
 }
 
@@ -835,6 +951,8 @@ async function runPreserve(browser, url) {
     localStorage.setItem("stock-tracker-theme", "light");
   }, { v3: v3, v2: v2, pre: pre, pre3: pre3 });
   const page = await context.newPage();
+  const preserveErrors = [];
+  watchOrigin(page, preserveErrors, new URL(url).origin);
   try {
     await page.goto(url, { waitUntil: "load" });
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "rename title");
@@ -856,6 +974,7 @@ async function runPreserve(browser, url) {
     assert(stored.pre3 === pre3, "premigration v3 bytes changed");
     assert(stored.theme === "light", "theme key changed");
     assert((await page.locator("html").getAttribute("data-theme")) === "light", "theme applied");
+    if (preserveErrors.length) throw new Error(preserveErrors.join("\n"));
     console.log("preservation passed");
   } finally {
     await context.close();
@@ -863,7 +982,7 @@ async function runPreserve(browser, url) {
 }
 
 async function runPagesBase(browser, url) {
-  const opened = await openPage(browser, url + "sofi-levels-card/", { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
+  const opened = await openPage(browser, url, { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
   const page = opened.page;
   try {
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "pages base title");
@@ -882,6 +1001,113 @@ async function runPagesBase(browser, url) {
   }
 }
 
+async function runTerminal(browser, url, today) {
+  const journal = {
+    schemaVersion: 2,
+    settings: { accountSize: 10000, riskPercent: 1 },
+    trades: [
+      { id: "win", symbol: "AAPL", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 110, fees: 0, entryDate: today, exitDate: today },
+      { id: "loss", symbol: "MSFT", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 95, fees: 0, entryDate: today, exitDate: today },
+      { id: "flat", symbol: "AMD", direction: "long", status: "closed", quantity: 4, entryPrice: 50, exitPrice: 50, fees: 0, entryDate: today, exitDate: today },
+      { id: "open", symbol: "NVDA", direction: "long", status: "open", quantity: 5, entryPrice: 150, hardStop: 140, entryDate: today },
+      { id: "call", symbol: "QQQ", assetType: "call", direction: "long", status: "closed", quantity: 1, entryPrice: 2, exitPrice: 3, fees: 0, entryDate: today, exitDate: today }
+    ],
+    days: {}
+  };
+  const sizes = [
+    ["desktop", { width: 1440, height: 900 }],
+    ["phone", { width: 390, height: 844 }]
+  ];
+  for (const size of sizes) {
+    const opened = await openPage(browser, url, size[1], "dark", journal);
+    const page = opened.page;
+    try {
+      await shows(page, "#dashRealized", "+$150.00");
+      await shows(page, "#dashWinRate", "2 / 4");
+      await shows(page, "#dashExpectancy", "2.00 R:R");
+      await shows(page, "#dashExpectancy", "+$37.50");
+      await shows(page, "#dashCapital", "Active Capital at Risk");
+      await shows(page, "#dashCapital", "$750.00");
+      await shows(page, "#dashCapital", "Committed cost basis");
+      await shows(page, "#dashOpen", "1 open");
+      await shows(page, "#dashboardBody", "CLOSED - WIN");
+      await shows(page, "#dashboardBody", "CLOSED - LOSS");
+      await shows(page, "#dashboardBody", "CLOSED - BREAKEVEN");
+      await shows(page, "#dashboardBody", "OPEN");
+      await shows(page, "#dashboardBody", "Call");
+      await shows(page, "#dashboardBody", "Equity");
+      const headers = await page.locator("#dashboardBody .terminal-table th").allTextContents();
+      assert(headers.join(" ").toUpperCase().indexOf("EXIT/TARGET") !== -1, "table headers " + headers.join("|"));
+      assert(headers.join(" ").toUpperCase().indexOf("TYPE") !== -1, "type column " + headers.join("|"));
+      await shows(page, "#dashCapital", "Planned risk");
+      const empty = await page.locator("#dashExpectancy").innerText();
+      assert(!/NaN|Infinity/.test(empty), "expectancy text " + empty);
+      await noOverflow(page, "terminal " + size[0]);
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
+    }
+  }
+  const bare = await openPage(browser, url, { width: 768, height: 1024 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
+  try {
+    await shows(bare.page, "#dashExpectancy", "Not enough closed trades");
+    await shows(bare.page, "#dashCapital", "No open positions");
+    await shows(bare.page, "#dashRealized", "N/A");
+    await noOverflow(bare.page, "terminal empty tablet");
+  } finally {
+    await bare.context.close();
+  }
+  const calcPage = await openPage(browser, url, { width: 390, height: 844 }, "dark", journal);
+  const page = calcPage.page;
+  try {
+    await page.getByRole("tab", { name: "Risk" }).click();
+    await page.locator("#riskAccount").fill("10000");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("50");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskAsset").selectOption("options");
+    await page.locator("#riskDirection").selectOption("long");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "0 contracts");
+    await shows(page, "#riskResult", "does not cover 1 contract");
+    assert(!/NaN|Infinity/.test(await page.locator("#riskResult").innerText()), "options size");
+    await page.locator("#riskPercent").fill("10");
+    await page.locator("#riskAsset").selectOption("shares");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "Max 500 shares");
+    await shows(page, "#riskResult", "Max account drawdown");
+    await shows(page, "#riskResult", "gaps, slippage, fees");
+    await page.locator("#riskStop").fill("50");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "same");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskPercent").fill("101");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "above 100");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("-1");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "negative");
+    await page.locator("#riskAccount").fill("");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "Enter account capital");
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await page.locator("#sizeCapital").fill("10000");
+    await page.locator("#sizeRisk").fill("1");
+    await page.locator("#sizeEntry").fill("50");
+    await page.locator("#sizeStop").fill("48");
+    await page.locator("#sizeAsset").selectOption("shares");
+    await page.locator("#sizeCalcBtn").click();
+    await shows(page, "#sizeResult", "Max 50 shares");
+    await shows(page, "#sizeResult", "Capital at risk");
+    await noOverflow(page, "terminal calculator phone");
+    if (page.errors.length) throw new Error(page.errors.join("\n"));
+    console.log("terminal checks passed");
+  } finally {
+    await calcPage.context.close();
+  }
+}
+
 async function assertRecentTradesFit(page) {
   const bad = await page.evaluate(function () {
     const card = document.querySelector("#dashboardBody .side-card");
@@ -893,12 +1119,18 @@ async function assertRecentTradesFit(page) {
       const node = cells[i];
       const rect = node.getBoundingClientRect();
       const label = (node.getAttribute("data-label") || "") + " " + node.textContent.trim();
-      if (rect.right > box.right + 1 || rect.left < box.left - 1) return "outside card " + label;
+      if (rect.width > 0 && rect.right < box.left - 1) return "outside card " + label;
       if (node.scrollWidth > node.clientWidth + 2) return "clipped " + label;
     }
     const text = card.innerText;
+    const source = card.textContent || "";
     if (!/\$\d+\.\d{2}/.test(text)) return "money value is not fully present";
-    if (text.indexOf("Exit") === -1 && text.indexOf("N/A") === -1) return "exit column missing";
+    if (source.indexOf("Exit") === -1 && text.indexOf("N/A") === -1) return "exit column missing";
+    const scroller = card.querySelector(".trade-scroll");
+    if (scroller) {
+      const sbox = scroller.getBoundingClientRect();
+      if (sbox.right > box.right + 2 || sbox.left < box.left - 2) return "table scroll extends outside the card";
+    }
     return "";
   });
   assert(!bad, "recent trades " + bad);
@@ -943,7 +1175,7 @@ async function runShots(browser, url, journal) {
     ["desktop", { width: 1440, height: 900 }]
   ];
   const sections = [
-    ["markets", "Markets", "investor_markets"],
+    ["markets", "Symbols", "investor_markets"],
     ["positions", "Trades", "investor_trades"],
     ["risk", "Risk", "investor_risk"],
     ["analytics", "Analytics", "investor_analytics"],
@@ -967,18 +1199,12 @@ async function runShots(browser, url, journal) {
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       });
       await noOverflow(page, size[0] + " overview");
+      await assertMainLayout(page, size[0] + " overview");
       await assertRecentTradesFit(page);
       await shotView(page, "investor_overview_" + size[0] + ".png");
       for (const section of sections) {
         await page.getByRole("tab", { name: section[1] }).click();
         await page.waitForSelector("#view-" + section[0] + ":not([hidden])");
-        if (section[0] === "markets") {
-          await page.waitForFunction(function () {
-            const el = document.getElementById("chartMount");
-            const widgetState = el && el.getAttribute("data-widget-state");
-            return widgetState === "loaded" || widgetState === "fallback" || widgetState === "empty";
-          }, null, { timeout: 12000 });
-        }
         if (section[0] === "risk") {
           await page.locator("#riskAccount").fill("10000");
           await page.locator("#riskPercent").fill("1");
@@ -1033,6 +1259,116 @@ async function runShots(browser, url, journal) {
     }
   }
   console.log("screenshots saved");
+}
+
+function proJournal(now) {
+  const year = now.getFullYear();
+  const specs = [
+    ["01-08", "AAPL", "long", 10, 180, 188, 1.5, "breakout"],
+    ["01-15", "MSFT", "long", 6, 400, 392, 1, "pullback"],
+    ["01-22", "NVDA", "long", 4, 130, 142, 1.25, "momentum"],
+    ["02-03", "TSLA", "short", 3, 240, 228, 1, "fade"],
+    ["02-12", "AMD", "long", 8, 150, 150, 0, "range"],
+    ["02-20", "META", "long", 20, 16, 14.5, 0.4, "breakout"],
+    ["03-04", "QQQ", "long", 5, 480, 496, 1, "trend"],
+    ["03-18", "AAPL", "long", 8, 185, 191, 1, "breakout"],
+    ["04-02", "NVDA", "short", 2, 140, 148, 0.8, "fade"],
+    ["04-16", "MSFT", "long", 4, 410, 424, 1, "trend"],
+    ["05-06", "AMD", "long", 10, 155, 149, 1, "pullback"],
+    ["05-21", "META", "long", 30, 15, 17.2, 0.6, "breakout"],
+    ["06-09", "TSLA", "long", 4, 220, 236, 1.2, "momentum"],
+    ["06-24", "QQQ", "long", 3, 500, 508, 0.8, "trend"],
+    ["07-08", "AAPL", "long", 12, 195, 202, 1.4, "breakout"],
+    ["07-22", "NVDA", "long", 3, 145, 138, 0.9, "momentum"],
+    ["08-05", "MSFT", "short", 2, 430, 418, 1, "fade"],
+    ["08-19", "AMD", "long", 6, 160, 171, 0.7, "range"],
+    ["09-03", "META", "long", 25, 17, 18.4, 0.5, "breakout"],
+    ["09-17", "QQQ", "long", 4, 520, 512, 1, "trend"],
+    ["09-30", "TSLA", "long", 3, 250, 261, 1, "momentum"],
+    ["10-01", "META", "long", 15, 18, 19.1, 0.4, "breakout"],
+    ["10-02", "AAPL", "long", 6, 200, 196, 1, "pullback"],
+    ["10-05", "NVDA", "long", 2, 150, 146, 0.8, "momentum"],
+    ["10-06", "MSFT", "long", 3, 420, 428, 1, "trend"],
+    ["10-07", "QQQ", "long", 2, 530, 536, 0.6, "trend"],
+    ["10-08", "AMD", "long", 5, 165, 170, 0.5, "range"]
+  ];
+  const trades = specs.map(function (row, index) {
+    const long = row[2] === "long";
+    return {
+      id: "pro-" + index,
+      symbol: row[1],
+      direction: row[2],
+      status: "closed",
+      quantity: row[3],
+      entryPrice: row[4],
+      exitPrice: row[5],
+      fees: row[6],
+      entryDate: year + "-" + row[0],
+      exitDate: year + "-" + row[0],
+      strategy: row[7],
+      exitReason: row[5] === row[4] ? "other" : (long ? (row[5] > row[4] ? "target" : "stop") : (row[5] < row[4] ? "target" : "stop")),
+      hardStop: long ? Math.round(row[4] * 0.95 * 100) / 100 : Math.round(row[4] * 1.05 * 100) / 100,
+      targetPrice: long ? Math.round(row[4] * 1.08 * 100) / 100 : Math.round(row[4] * 0.92 * 100) / 100
+    };
+  });
+  trades.push({
+    id: "pro-open",
+    symbol: "NVDA",
+    name: "NVIDIA",
+    direction: "long",
+    status: "open",
+    quantity: 5,
+    entryPrice: 150,
+    hardStop: 142,
+    entryDate: year + "-10-02",
+    strategy: "momentum",
+    thesis: "Still open. Not a realized result."
+  });
+  return {
+    schemaVersion: 2,
+    settings: { accountSize: 50000, riskPercent: 1, selectedSymbol: "NVDA", selectedExchange: "NASDAQ", chartPeriod: "6M" },
+    trades: trades,
+    days: {}
+  };
+}
+
+async function runProShots(browser, url, journal) {
+  const shots = [
+    ["desktop", { width: 1440, height: 900 }, [
+      ["Overview", "pro_overview_desktop.png"],
+      ["Analytics", "pro_analytics_desktop.png"],
+      ["Trades", "pro_trades_desktop.png"],
+      ["Calendar", "pro_calendar_desktop.png"]
+    ]],
+    ["phone", { width: 390, height: 844 }, [
+      ["Overview", "pro_overview_phone.png"],
+      ["Trades", "pro_trades_phone.png"]
+    ]]
+  ];
+  for (const size of shots) {
+    const opened = await openPage(browser, url, size[1], "dark", journal);
+    const page = opened.page;
+    try {
+      for (const shot of size[2]) {
+        await page.getByRole("tab", { name: shot[0] }).click();
+        await page.waitForTimeout(200);
+        await page.evaluate(function () {
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+          const tip = document.getElementById("chartTip");
+          if (tip) tip.hidden = true;
+        });
+        await noOverflow(page, "pro " + size[0] + " " + shot[0]);
+        await page.screenshot({
+          path: "/opt/cursor/artifacts/" + shot[1],
+          fullPage: size[1].width >= 900
+        });
+      }
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
+    }
+  }
+  console.log("pro screenshots saved");
 }
 
 main().catch(function (err) {

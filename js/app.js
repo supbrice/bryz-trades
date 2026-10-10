@@ -22,7 +22,8 @@
     analyticsPane: "overview",
     rangePreset: "ytd",
     rangeFrom: "",
-    rangeTo: ""
+    rangeTo: "",
+    lastSide: "long"
   };
 
   function persist() {
@@ -158,6 +159,35 @@
     addTrade: function () {
       ST.openTradeDialog(null, "create");
     },
+    quickAdd: function (fields) {
+      const symbol = String(fields && fields.symbol || "").trim().replace(/^\$/, "").toUpperCase();
+      const side = fields && fields.side === "short" ? "short" : "long";
+      const quantity = String(fields && fields.quantity || "").trim();
+      const price = String(fields && fields.price || "").trim();
+      const date = String(fields && fields.date || "").trim();
+      if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return { error: "Enter a ticker like AAPL or BRK.B." };
+      const qty = ST.qtyNumber(quantity);
+      const px = ST.priceNumber(price);
+      if (qty == null || qty <= 0) return { error: "Enter a quantity above zero." };
+      if (px == null || px <= 0) return { error: "Enter a price above zero. It is the price you type, not a quote." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Enter the date for this trade." };
+      const built = ST.tradeFromFields({
+        symbol: symbol,
+        direction: side,
+        status: "open",
+        quantity: quantity,
+        entryPrice: price,
+        entryDate: date
+      });
+      if (built.error) return built;
+      state.data.trades.push(built.trade);
+      state.lastSide = side;
+      state.tab = "dashboard";
+      persist();
+      refresh();
+      ST.showBanner(symbol + " added. The price is the one you typed, not a live quote.");
+      return { ok: true };
+    },
     editTrade: function (id) {
       const trade = findTrade(id);
       if (trade) ST.openTradeDialog(trade, "edit");
@@ -191,6 +221,7 @@
       } else {
         state.data.trades.push(built.trade);
       }
+      if (fields && (fields.direction === "long" || fields.direction === "short")) state.lastSide = fields.direction;
       state.tab = "positions";
       persist();
       refresh();
@@ -271,25 +302,38 @@
       return { ok: true };
     },
     calculateRisk: function (input) {
-      const result = ST.positionRisk(input);
-      const box = document.getElementById("riskResult");
-      if (!result.ok) {
-        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(result.error) + "</p>";
+      const sized = ST.calculateRisk({
+        capital: input.accountSize,
+        riskPercent: input.riskPercent,
+        entry: input.entryPrice,
+        stop: input.stopPrice,
+        assetType: input.assetType || "shares"
+      });
+      const box = document.getElementById(input.resultId || "riskResult");
+      if (!sized.ok) {
+        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(sized.error) + "</p>";
+        return;
+      }
+      const directional = input.direction ? ST.positionRisk(input) : null;
+      if (directional && !directional.ok) {
+        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(directional.error) + "</p>";
         return;
       }
       let reward = "";
-      if (result.rewardCents != null) {
-        reward = "<p>Potential reward " + ST.escapeHtml(ST.formatCents(result.rewardCents)) +
-          ". Reward per share " + ST.escapeHtml(ST.formatCents(result.rewardPerShareCents)) +
-          ". Reward to risk " + ST.escapeHtml(result.rewardToRisk || "N/A") + ".</p>";
-      } else if (result.rewardNote) {
-        reward = "<p>" + ST.escapeHtml(result.rewardNote) + "</p>";
+      if (directional && directional.ok && directional.rewardCents != null) {
+        reward = "<p>Potential reward " + ST.escapeHtml(ST.formatCents(directional.rewardCents)) +
+          ". Reward per share " + ST.escapeHtml(ST.formatCents(directional.rewardPerShareCents)) +
+          ". Reward to risk " + ST.escapeHtml(directional.rewardToRisk || "N/A") + ".</p>";
+      } else if (directional && directional.ok && directional.rewardNote) {
+        reward = "<p>" + ST.escapeHtml(directional.rewardNote) + "</p>";
       }
-      box.innerHTML = "<h3>Estimated size</h3><p>Planned risk " + ST.escapeHtml(ST.formatCents(result.plannedRiskCents)) +
-        (result.equityPercent ? " (" + ST.escapeHtml(result.equityPercent) + " of the account size you entered)" : "") +
-        ". Risk per share " + ST.escapeHtml(ST.formatCents(result.perShareRiskCents)) +
-        ". Quantity " + ST.escapeHtml(result.quantityText) + " shares.</p>" + reward +
-        "<p>" + ST.escapeHtml(result.disclaimer) + "</p>";
+      const riskText = ST.formatCents(sized.capitalAtRiskCents, "plain");
+      box.innerHTML = "<h3>Estimated size</h3><p>Max " + ST.escapeHtml(sized.maxUnits) + " " + ST.escapeHtml(sized.unitLabel) +
+        ". Capital at risk " + ST.escapeHtml(riskText) +
+        ". Max account drawdown " + ST.escapeHtml(sized.maxDrawdownPercent || "N/A") + ".</p>" +
+        (sized.note ? "<p>" + ST.escapeHtml(sized.note) + "</p>" : "") +
+        reward +
+        "<p>" + ST.escapeHtml(ST.RISK_DISCLAIMER) + "</p>";
       if (input.remember) {
         const account = ST.moneyNumber(input.accountSize);
         const percent = ST.scaledToNumber(ST.parseScaledDigits(input.riskPercent, 2), 2);

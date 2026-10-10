@@ -9,8 +9,8 @@ const storage = require("../js/storage.js");
 function trade(overrides) {
   return Object.assign({
     id: "t1",
-    symbol: "SOFI",
-    name: "SoFi",
+    symbol: "AAPL",
+    name: "Apple",
     direction: "long",
     status: "closed",
     quantity: 5,
@@ -45,7 +45,7 @@ test("v1 positions and manual days migrate without becoming realized trades", ()
     version: 1,
     tickers: [{
       id: "sof",
-      symbol: "SOFI",
+      symbol: "AAPL",
       shares: 50,
       avgCost: 18,
       notes: "keep me",
@@ -57,7 +57,7 @@ test("v1 positions and manual days migrate without becoming realized trades", ()
       close: 17
     }],
     days: {
-      "2026-01-05": { pnl: 25.5, note: "manual day", breakdown: [{ tickerId: "sof", symbol: "SOFI", amount: 25.5 }] }
+      "2026-01-05": { pnl: 25.5, note: "manual day", breakdown: [{ tickerId: "sof", symbol: "AAPL", amount: 25.5 }] }
     }
   });
   assert.equal(migrated.schemaVersion, 3);
@@ -79,7 +79,7 @@ test("a pasted close is not an exit, and a bad v1 row is kept", () => {
   const migrated = schema.migrateV1({
     version: 1,
     tickers: [
-      { id: "ok", symbol: "SOFI", shares: 1, avgCost: 10, orderStatus: "filled", close: 9 },
+      { id: "ok", symbol: "AAPL", shares: 1, avgCost: 10, orderStatus: "filled", close: 9 },
       { id: "bad", symbol: "???", shares: -5, notes: "messy" }
     ],
     days: { "not-a-date": { pnl: 3 }, "2026-01-08": { pnl: "nope", note: "kept" } }
@@ -98,7 +98,7 @@ test("round trip, malformed files, and incompatible versions do not apply", () =
   const exported = schema.exportJson(original);
   const parsed = schema.journalFromText(exported);
   assert.equal(parsed.trades[0].netCents, undefined);
-  assert.equal(parsed.trades[0].symbol, "SOFI");
+  assert.equal(parsed.trades[0].symbol, "AAPL");
   assert.equal(parsed.trades[0].fees, 1);
   assert.equal(parsed.schemaVersion, 3);
   assert.match(exported, /"schemaVersion": 3/);
@@ -172,7 +172,7 @@ test("replace swaps the journal and a failed commit leaves the saved copy", () =
 test("migration stores a premigration backup and does not drop the old key", () => {
   const v1 = JSON.stringify({
     version: 1,
-    tickers: [{ id: "sof", symbol: "SOFI", shares: 2, avgCost: 18, getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "waiting" }],
+    tickers: [{ id: "sof", symbol: "AAPL", shares: 2, avgCost: 18, getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "waiting" }],
     days: { "2026-02-02": { pnl: -4, note: "down", breakdown: [] } }
   });
   const store = storage.createMemoryStorage({ [schema.KEYS.v1]: v1 });
@@ -192,7 +192,7 @@ test("migration stores a premigration backup and does not drop the old key", () 
 });
 
 test("a failed migration backup does not write the new journal", () => {
-  const v1 = JSON.stringify({ version: 1, tickers: [{ symbol: "SOFI" }], days: {} });
+  const v1 = JSON.stringify({ version: 1, tickers: [{ symbol: "AAPL" }], days: {} });
   const store = storage.createMemoryStorage({ [schema.KEYS.v1]: v1 });
   const originalSet = store.setItem.bind(store);
   store.setItem = (key, value) => {
@@ -336,4 +336,55 @@ test("partial exits cannot cover more shares than the position", () => {
     exits: [{ quantity: 6, price: 110, date: "2026-02-02", fees: 0, reason: "" }]
   });
   assert.match(built.error, /more shares/);
+});
+
+test("a missing type reads as equity and is not written back", () => {
+  const raw = {
+    id: "kept",
+    symbol: "AAPL",
+    direction: "long",
+    status: "closed",
+    quantity: 1,
+    entryPrice: 10,
+    exitPrice: 12,
+    entryDate: "2026-01-01",
+    exitDate: "2026-01-02",
+    fees: 0
+  };
+  const cleaned = schema.cleanTrade(raw);
+  assert.equal(Object.prototype.hasOwnProperty.call(cleaned, "assetType"), false);
+  assert.equal(calc.assetTypeOf(cleaned), "equity");
+  assert.equal(calc.tradeResult(cleaned).netCents, 200n);
+  const explicit = schema.cleanTrade(Object.assign({}, raw, { assetType: "Equity" }));
+  assert.equal(Object.prototype.hasOwnProperty.call(explicit, "assetType"), false);
+  const call = schema.cleanTrade(Object.assign({}, raw, { id: "c", assetType: "Call", entryPrice: 2, exitPrice: 3 }));
+  assert.equal(call.assetType, "call");
+  assert.equal(calc.tradeResult(call).netCents, 10000n);
+  assert.throws(() => schema.cleanTrade(Object.assign({}, raw, { assetType: "future" })), /Equity, Call, or Put/);
+  const storedRaw = JSON.stringify({ schemaVersion: 3, trades: [raw], days: {}, settings: {} });
+  const store = storage.createMemoryStorage({ [schema.KEYS.journal]: storedRaw });
+  const loaded = storage.loadJournal(store);
+  assert.equal(store.getItem(schema.KEYS.journal), storedRaw);
+  assert.equal(Object.prototype.hasOwnProperty.call(loaded.data.trades[0], "assetType"), false);
+  const written = schema.toStored(loaded.data);
+  assert.equal(Object.prototype.hasOwnProperty.call(written.trades[0], "assetType"), false);
+  const recovered = schema.readStoredJournal(JSON.stringify({
+    schemaVersion: 3,
+    trades: [Object.assign({}, raw, { assetType: "warrant" })],
+    days: {},
+    settings: {}
+  }));
+  assert.match(recovered.journal.trades[0].notes, /kept as Equity/);
+  assert.equal(Object.prototype.hasOwnProperty.call(recovered.journal.trades[0], "assetType"), false);
+});
+
+test("a first visit stores an empty journal", () => {
+  const seeded = schema.seedJournal();
+  assert.equal(seeded.trades.length, 0);
+  assert.deepEqual(seeded.days, {});
+  assert.equal(seeded.schemaVersion, 3);
+  const store = storage.createMemoryStorage({});
+  const loaded = storage.loadJournal(store);
+  assert.equal(loaded.data.trades.length, 0);
+  assert.equal(JSON.parse(store.getItem(schema.KEYS.journal)).trades.length, 0);
 });

@@ -28,44 +28,70 @@
   <link rel="icon" href="assets/bryz-trades-logo.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/pro.css" />
 </head>
 <body>
   <div class="app">
+    <aside class="sidebar">
+      <div class="tab-shell">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><span class="nav-label">Overview</span></button>
+        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="2.2"></circle><circle cx="16" cy="8" r="2.2"></circle><circle cx="8" cy="16" r="2.2"></circle><circle cx="16" cy="16" r="2.2"></circle></svg><span class="nav-label">Symbols</span></button>
+        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h10"></path></svg><span class="nav-label">Trades</span></button>
+        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path></svg><span class="nav-label">Risk</span></button>
+        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path></svg><span class="nav-label">Analytics</span></button>
+        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span class="nav-label">Calendar</span></button>
+        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg><span class="nav-label">Settings</span></button>
+      </nav>
+      </div>
+    </aside>
+    <div class="workspace">
     <header class="topbar">
       <div class="brand-row">
         <div class="brand">
           <img class="logo" src="assets/bryz-trades-logo.svg" alt="" width="32" height="32" />
           <h1>Bryz Trades</h1>
         </div>
-        <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
-          <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="12" r="4"></circle>
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
-          </svg>
-          <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-            <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
-          </svg>
-          <span class="visually-hidden" id="themeToggleLabel">Dark</span>
-        </button>
       </div>
+      <div class="toolbar">
+        <h2 id="pageTitle">Overview</h2>
+        <div class="range-bar top-range">
+          <label>Range
+            <select id="overviewPreset" aria-label="Performance range">
+              <option value="1w">1W</option>
+              <option value="1m">1M</option>
+              <option value="3m">3M</option>
+              <option value="ytd" selected>YTD</option>
+              <option value="1y">1Y</option>
+              <option value="all">All</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>From
+            <input id="overviewFrom" type="date" />
+          </label>
+          <label>To
+            <input id="overviewTo" type="date" />
+          </label>
+        </div>
+        <button type="button" id="topLogTrade" class="primary">Log trade</button>
+      </div>
+      <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+          <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
+        </svg>
+        <span class="visually-hidden" id="themeToggleLabel">Dark</span>
+      </button>
       <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
     </header>
 
     <div id="banner" class="banner" role="status" hidden></div>
 
     <div class="shell">
-      <div class="tab-shell">
-      <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard">Overview</button>
-        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets">Markets</button>
-        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions">Trades</button>
-        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk">Risk</button>
-        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics">Analytics</button>
-        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar">Calendar</button>
-        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings">Settings</button>
-      </nav>
-      </div>
-
       <main class="views">
         <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
           <div class="panel">
@@ -73,24 +99,66 @@
               <h2>Overview</h2>
               <button type="button" id="dashAddTrade" class="primary">Log trade</button>
             </div>
-            <div class="range-bar">
-              <label>Period
-                <select id="overviewPreset">
-                  <option value="ytd">Year to date</option>
-                  <option value="month">This month</option>
-                  <option value="all">All dated closes</option>
-                  <option value="custom">Custom</option>
+            <p class="hint">Recorded exits only. A stop is a plan, not a market fill. Prices you type are not a live quote.</p>
+            <form id="quickAdd" class="quick-add">
+              <label>Symbol
+                <input id="quickSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" data-tip="Ticker you record. Any symbol that fits AAPL or BRK.B." />
+              </label>
+              <label>Side
+                <select id="quickSide" data-tip="Starts as the last side you used in this visit.">
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
                 </select>
               </label>
-              <label>From
-                <input id="overviewFrom" type="date" />
+              <label>Qty
+                <input id="quickQty" inputmode="decimal" autocomplete="off" placeholder="10" />
               </label>
-              <label>To
-                <input id="overviewTo" type="date" />
+              <label>Price
+                <input id="quickPrice" inputmode="decimal" autocomplete="off" placeholder="100.00" data-tip="The price you type. It is not a live or delayed quote." />
               </label>
+              <label>Date
+                <input id="quickDate" type="date" data-tip="Defaults to today." />
+              </label>
+              <button type="submit" class="primary quick-submit" id="quickSave">Add</button>
+              <p id="quickError" class="form-error" role="alert" hidden></p>
+              <p class="hint quick-hint">N focuses this row. Enter saves it. The price is the one you type.</p>
+            </form>
+            <div id="dashboardBody" aria-busy="true">
+              <div class="skeleton-grid" aria-hidden="true">
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+              </div>
             </div>
-            <p class="hint">Recorded exits only. A price you type is an estimate. A stop is a plan, not a market fill.</p>
-            <div id="dashboardBody"></div>
+            <form id="sizeForm" class="size-widget chart-card">
+              <div class="card-title"><h3>Position size</h3></div>
+              <p class="hint">Planning math from numbers you type. Shares use the stop distance. Options contracts use that distance times 100. Nothing here is a quote.</p>
+              <div class="size-grid">
+                <label>Account capital ($)
+                  <input id="sizeCapital" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Risk percent
+                  <input id="sizeRisk" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Entry
+                  <input id="sizeEntry" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Stop
+                  <input id="sizeStop" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Size as
+                  <select id="sizeAsset">
+                    <option value="shares">Shares</option>
+                    <option value="options">Options contracts</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="primary" id="sizeCalcBtn">Calculate size</button>
+              </div>
+              <div id="sizeResult" class="result-box" role="status"></div>
+            </form>
             <div class="button-row shortcuts">
               <button type="button" id="dashPositions">Open positions</button>
               <button type="button" id="gotoAnalytics">Analytics</button>
@@ -100,11 +168,11 @@
         </section>
 
         <section id="view-markets" class="view" role="tabpanel" aria-labelledby="tab-markets" hidden>
-          <div class="panel chart-panel">
+          <div class="panel">
             <div class="panel-head">
-              <h2>Markets</h2>
+              <h2>Symbols</h2>
             </div>
-            <p class="hint">Display only. Chart prices are not saved into trades.</p>
+            <p class="hint">Closed results, plans, and the watchlist. No live prices.</p>
             <form id="symbolForm" class="symbol-bar">
               <label>Symbol
                 <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
@@ -112,38 +180,19 @@
               <label>Exchange
                 <input id="symbolExchange" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="NASDAQ" />
               </label>
-              <button type="submit" id="symbolApply">Show chart</button>
+              <button type="submit" id="symbolApply">Show symbol</button>
               <button type="button" id="watchAdd">Add to watchlist</button>
               <button type="button" id="exchangeHint" hidden>Use suggested exchange</button>
             </form>
             <datalist id="symbolSuggestions"></datalist>
             <p id="exchangeHintText" class="hint"></p>
-            <div class="period-bar" role="group" aria-label="Chart period">
-              <button type="button" data-period="1D">1D</button>
-              <button type="button" data-period="5D">5D</button>
-              <button type="button" data-period="1M">1M</button>
-              <button type="button" data-period="6M">6M</button>
-              <button type="button" data-period="YTD">YTD</button>
-              <button type="button" data-period="1Y">1Y</button>
-              <button type="button" data-period="5Y">5Y</button>
-              <button type="button" data-period="MAX">MAX</button>
-            </div>
-            <div id="chartMount" class="chart-mount" role="region" aria-label="Price chart"></div>
-            <p class="chart-attrib">Chart by <a href="https://www.tradingview.com/" rel="noopener noreferrer" target="_blank">TradingView</a>. Market data may be delayed. Bryz Trades does not copy chart prices into trade records, and it does not calculate profit from the chart.</p>
+            <div id="watchlistBody"></div>
           </div>
           <div class="panel" id="symbolDetail">
             <div class="panel-head">
-              <h2>Symbol detail</h2>
+              <h2>Symbol</h2>
             </div>
             <div id="symbolDetailBody"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Watchlist</h2>
-            </div>
-            <p class="hint">Prices appear only inside the TradingView tape, if it loads. They are not saved.</p>
-            <div id="watchlistBody"></div>
-            <div id="tapeMount" class="tape-mount" role="region" aria-label="Watchlist prices"></div>
           </div>
         </section>
 
@@ -191,7 +240,7 @@
                 <input id="positionTo" type="date" />
               </label>
             </div>
-            <div id="positionsList"></div>
+            <div id="positionsList"><p class="empty">Loading journal…</p></div>
           </div>
         </section>
 
@@ -208,7 +257,7 @@
             </div>
             <div id="summary" aria-live="polite"></div>
             <div id="calendarGrid" class="calendar" role="group"></div>
-            <p class="hint calendar-hint">T is closed trades. M is a manual entry. They are never added together. A blank day is unrecorded. $0 is a recorded flat. Adj is an account adjustment, not trading P/L.</p>
+            <p class="hint calendar-hint">Closed-trade P/L by exit date. Manual days stay separate.</p>
             <div id="weekList"></div>
           </div>
         </section>
@@ -227,10 +276,13 @@
             </div>
             <div class="range-bar">
               <label>Range
-                <select id="rangePreset">
-                  <option value="ytd">Year to date</option>
-                  <option value="month">This month</option>
-                  <option value="all">All dated closes</option>
+                <select id="rangePreset" aria-label="Analytics range">
+                  <option value="1w">1W</option>
+                  <option value="1m">1M</option>
+                  <option value="3m">3M</option>
+                  <option value="ytd" selected>YTD</option>
+                  <option value="1y">1Y</option>
+                  <option value="all">All</option>
                   <option value="custom">Custom</option>
                 </select>
               </label>
@@ -262,7 +314,7 @@
             <div class="panel-head">
               <h2>Risk</h2>
             </div>
-            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss. Remember saves only account size and risk percent.</p>
+            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss.</p>
             <div class="row-2">
               <label>Account size ($)
                 <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
@@ -286,6 +338,14 @@
                   <option value="short">Short</option>
                 </select>
               </label>
+              <label>Size as
+                <select id="riskAsset">
+                  <option value="shares">Shares</option>
+                  <option value="options">Options contracts</option>
+                </select>
+              </label>
+            </div>
+            <div class="row-2">
               <label>Planned target ($)
                 <input id="riskTarget" inputmode="decimal" autocomplete="off" placeholder="Optional" />
               </label>
@@ -331,6 +391,16 @@
 
     <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
     <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
+    <aside id="tradeDrawer" class="drawer" hidden>
+      <div class="drawer-card" role="dialog" aria-labelledby="drawerTitle">
+        <div class="drawer-head">
+          <h2 id="drawerTitle">Trade</h2>
+          <button type="button" id="drawerClose" class="icon-btn" aria-label="Close trade detail">×</button>
+        </div>
+        <div id="drawerBody"></div>
+      </div>
+    </aside>
+    </div>
   </div>
 
   <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">
@@ -360,6 +430,13 @@
               <option value="short">Short</option>
             </select>
           </label>
+          <label>Type
+            <select id="fieldAsset">
+              <option value="equity">Equity</option>
+              <option value="call">Call</option>
+              <option value="put">Put</option>
+            </select>
+          </label>
           <label>Status
             <select id="fieldStatus">
               <option value="open">Open</option>
@@ -378,13 +455,13 @@
         </div>
         <div class="row-2">
           <label>Entry price ($)
-            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="18.00" />
+            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="100.00" />
           </label>
           <label>Average entry cost ($)
             <input id="fieldAvg" inputmode="decimal" autocomplete="off" placeholder="Optional" />
           </label>
         </div>
-        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin.</p>
+        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin. Call and Put multiply profit, loss, and cost by 100. Equity does not. Leaving type as Equity does not rewrite a saved trade that has no type.</p>
         <div class="row-2">
           <label>Planned target ($)
             <input id="fieldTarget" inputmode="decimal" autocomplete="off" />
@@ -414,7 +491,7 @@
             </select>
           </label>
         </div>
-        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. Chart prices are not used.</p>
+        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. No live price is loaded.</p>
         <details id="partialDetails">
           <summary>Partial exits</summary>
           <p class="hint">Average-cost method. Every exit uses the same recorded entry price. Selling some shares leaves the rest open. Each lot has its own fees. A blank fee on a lot is treated as $0.00.</p>
@@ -422,14 +499,14 @@
           <button type="button" id="addExitBtn">Add partial exit</button>
         </details>
         <div class="row-2">
-          <label>Manual mark price ($)
-            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Only if you type it" />
+          <label>Manual mark, estimate ($)
+            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Estimate you type" data-tip="An estimate you type for unrealized P/L. It is not a live or delayed quote." />
           </label>
           <label>Mark as of
             <input id="fieldMarkAsOf" type="date" />
           </label>
         </div>
-        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is manual. It is not read from the chart.</p>
+        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is an estimate you type. It is not a market price.</p>
         <div class="row-2">
           <label>Strategy
             <input id="fieldStrategy" maxlength="80" autocomplete="off" />
@@ -566,13 +643,13 @@
 
   <noscript><p class="footer-note">Bryz Trades needs JavaScript. It still stays on this device — there is no account.</p></noscript>
   <script src="js/money.js"></script>
+  <script src="js/calculateRisk.js"></script>
   <script src="js/calc.js"></script>
   <script src="js/schema.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/format.js"></script>
   <script src="js/logic.js"></script>
   <script src="js/theme.js"></script>
-  <script src="js/chart.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 </body>
