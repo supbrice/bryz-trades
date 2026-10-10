@@ -202,13 +202,23 @@
         el('span', { class: 'd', text: String(d) }), el('span', { class: 'p', text: amt })]));
     }
     $('calTitle').textContent = MONTHS[m] + ' ' + y;
-    $('calTotal').textContent = sum.tradeDays ? money(sum.tradeCents) + ' · ' + sum.tradeDays + ' trading day' + (sum.tradeDays === 1 ? '' : 's') : 'No closed trades this month';
-    $('calTotal').className = sum.tradeDays ? signClass(sum.tradeCents) : '';
+    var calTotal = $('calTotal');
+    calTotal.className = '';
+    calTotal.textContent = sum.tradeDays ? '' : 'No closed trades this month';
+    if (sum.tradeDays) {
+      calTotal.appendChild(el('span', { class: 'cal-month ' + signClass(sum.tradeCents), text: money(sum.tradeCents) }));
+      calTotal.appendChild(document.createTextNode(' · ' + sum.tradeDays + ' trading day' + (sum.tradeDays === 1 ? '' : 's')));
+    }
     var foot = [];
     if (sum.manualDays) foot.push('Manual entries ' + money(sum.manualCents) + ' on ' + sum.manualDays + ' day' + (sum.manualDays === 1 ? '' : 's') + ' (shown in gray, not added to trade totals)');
     if (typeof sum.adjustmentCents === 'bigint') foot.push('Account adjustments ' + money(sum.adjustmentCents));
-    if (typeof sum.ytdTradeCents === 'bigint') foot.push(sum.ytdLabel + ' ' + money(sum.ytdTradeCents));
-    $('calFoot').textContent = foot.join(' · ');
+    var calFoot = $('calFoot');
+    calFoot.textContent = foot.join(' · ');
+    if (typeof sum.ytdTradeCents === 'bigint') {
+      if (foot.length) calFoot.appendChild(document.createTextNode(' · '));
+      calFoot.appendChild(document.createTextNode(sum.ytdLabel + ' '));
+      calFoot.appendChild(el('span', { class: 'cal-ytd ' + signClass(sum.ytdTradeCents), text: money(sum.ytdTradeCents) }));
+    }
   }
   function openDayFromEvent(e) { openDay(e.currentTarget.getAttribute('data-key')); }
   $('calPrev').addEventListener('click', function () { calMonth.m--; if (calMonth.m < 0) { calMonth.m = 11; calMonth.y--; } renderCalendar(); });
