@@ -56,11 +56,14 @@
       <div class="toolbar">
         <h2 id="pageTitle">Overview</h2>
         <div class="range-bar top-range">
-          <label>Period
-            <select id="overviewPreset">
-              <option value="ytd">Year to date</option>
-              <option value="month">This month</option>
-              <option value="all">All dated closes</option>
+          <label>Range
+            <select id="overviewPreset" aria-label="Performance range">
+              <option value="1w">1W</option>
+              <option value="1m">1M</option>
+              <option value="3m">3M</option>
+              <option value="ytd" selected>YTD</option>
+              <option value="1y">1Y</option>
+              <option value="all">All</option>
               <option value="custom">Custom</option>
             </select>
           </label>
@@ -96,8 +99,38 @@
               <h2>Overview</h2>
               <button type="button" id="dashAddTrade" class="primary">Log trade</button>
             </div>
-            <p class="hint">Recorded exits only. A stop is a plan, not a market fill.</p>
-            <div id="dashboardBody"></div>
+            <p class="hint">Recorded exits only. A stop is a plan, not a market fill. Prices you type are not a live quote.</p>
+            <form id="quickAdd" class="quick-add">
+              <label>Symbol
+                <input id="quickSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" data-tip="Ticker you record. Any symbol that fits AAPL or BRK.B." />
+              </label>
+              <label>Side
+                <select id="quickSide" data-tip="Starts as the last side you used in this visit.">
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
+              </label>
+              <label>Qty
+                <input id="quickQty" inputmode="decimal" autocomplete="off" placeholder="10" />
+              </label>
+              <label>Price
+                <input id="quickPrice" inputmode="decimal" autocomplete="off" placeholder="100.00" data-tip="The price you type. It is not a live or delayed quote." />
+              </label>
+              <label>Date
+                <input id="quickDate" type="date" data-tip="Defaults to today." />
+              </label>
+              <button type="submit" class="primary quick-submit" id="quickSave">Add</button>
+              <p id="quickError" class="form-error" role="alert" hidden></p>
+              <p class="hint quick-hint">N focuses this row. Enter saves it. The price is the one you type.</p>
+            </form>
+            <div id="dashboardBody" aria-busy="true">
+              <div class="skeleton-grid" aria-hidden="true">
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+                <span class="skeleton"></span>
+              </div>
+            </div>
             <div class="button-row shortcuts">
               <button type="button" id="dashPositions">Open positions</button>
               <button type="button" id="gotoAnalytics">Analytics</button>
@@ -179,7 +212,7 @@
                 <input id="positionTo" type="date" />
               </label>
             </div>
-            <div id="positionsList"></div>
+            <div id="positionsList"><p class="empty">Loading journal…</p></div>
           </div>
         </section>
 
@@ -215,10 +248,13 @@
             </div>
             <div class="range-bar">
               <label>Range
-                <select id="rangePreset">
-                  <option value="ytd">Year to date</option>
-                  <option value="month">This month</option>
-                  <option value="all">All dated closes</option>
+                <select id="rangePreset" aria-label="Analytics range">
+                  <option value="1w">1W</option>
+                  <option value="1m">1M</option>
+                  <option value="3m">3M</option>
+                  <option value="ytd" selected>YTD</option>
+                  <option value="1y">1Y</option>
+                  <option value="all">All</option>
                   <option value="custom">Custom</option>
                 </select>
               </label>
@@ -376,7 +412,7 @@
         </div>
         <div class="row-2">
           <label>Entry price ($)
-            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="18.00" />
+            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="100.00" />
           </label>
           <label>Average entry cost ($)
             <input id="fieldAvg" inputmode="decimal" autocomplete="off" placeholder="Optional" />
@@ -412,7 +448,7 @@
             </select>
           </label>
         </div>
-        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. Chart prices are not used.</p>
+        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. No live price is loaded.</p>
         <details id="partialDetails">
           <summary>Partial exits</summary>
           <p class="hint">Average-cost method. Every exit uses the same recorded entry price. Selling some shares leaves the rest open. Each lot has its own fees. A blank fee on a lot is treated as $0.00.</p>
@@ -420,14 +456,14 @@
           <button type="button" id="addExitBtn">Add partial exit</button>
         </details>
         <div class="row-2">
-          <label>Manual mark price ($)
-            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Only if you type it" />
+          <label>Manual mark, estimate ($)
+            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Estimate you type" data-tip="An estimate you type for unrealized P/L. It is not a live or delayed quote." />
           </label>
           <label>Mark as of
             <input id="fieldMarkAsOf" type="date" />
           </label>
         </div>
-        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is manual. It is not read from the chart.</p>
+        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is an estimate you type. It is not a market price.</p>
         <div class="row-2">
           <label>Strategy
             <input id="fieldStrategy" maxlength="80" autocomplete="off" />

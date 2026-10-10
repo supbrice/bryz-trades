@@ -139,14 +139,38 @@
     };
   }
 
+  function shiftMonths(date, months) {
+    const day = date.getDate();
+    const next = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(day, last));
+    return next;
+  }
+
+  function trailingRange(today, start, label) {
+    return { start: dateKey(start), end: dateKey(today), label: label };
+  }
+
   function rangeForPreset(preset, today) {
-    if (preset === "all") return { start: null, end: null, label: "All closed trades" };
+    const day = today || new Date();
+    if (preset === "all") return { start: null, end: null, label: "All dated closes" };
     if (preset === "month") {
-      const bounds = monthBounds(today.getFullYear(), today.getMonth());
+      const bounds = monthBounds(day.getFullYear(), day.getMonth());
       return { start: bounds.start, end: bounds.end, label: "This month" };
     }
-    const bounds = ytdBounds(today.getFullYear(), today);
+    if (preset === "1w") return trailingRange(day, addDays(day, -6), "1 week");
+    if (preset === "1m") return trailingRange(day, shiftMonths(day, -1), "1 month");
+    if (preset === "3m") return trailingRange(day, shiftMonths(day, -3), "3 months");
+    if (preset === "1y") return trailingRange(day, shiftMonths(day, -12), "1 year");
+    const bounds = ytdBounds(day.getFullYear(), day);
     return { start: bounds.start, end: bounds.end, label: bounds.label };
+  }
+
+  function accountReturn(netCents, accountSize) {
+    if (typeof netCents !== "bigint") return null;
+    const account = money.parseCents(accountSize);
+    if (account == null || account <= 0n) return null;
+    return formatPercent(netCents, account, 2);
   }
 
   function inDateRange(key, start, end) {
@@ -1092,6 +1116,7 @@
     monthBounds: monthBounds,
     ytdBounds: ytdBounds,
     rangeForPreset: rangeForPreset,
+    accountReturn: accountReturn,
     inDateRange: inDateRange,
     effectiveEntry: effectiveEntry,
     grossPnlCents: grossPnlCents,

@@ -22,7 +22,8 @@
     analyticsPane: "overview",
     rangePreset: "ytd",
     rangeFrom: "",
-    rangeTo: ""
+    rangeTo: "",
+    lastSide: "long"
   };
 
   function persist() {
@@ -158,6 +159,35 @@
     addTrade: function () {
       ST.openTradeDialog(null, "create");
     },
+    quickAdd: function (fields) {
+      const symbol = String(fields && fields.symbol || "").trim().replace(/^\$/, "").toUpperCase();
+      const side = fields && fields.side === "short" ? "short" : "long";
+      const quantity = String(fields && fields.quantity || "").trim();
+      const price = String(fields && fields.price || "").trim();
+      const date = String(fields && fields.date || "").trim();
+      if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return { error: "Enter a ticker like AAPL or BRK.B." };
+      const qty = ST.qtyNumber(quantity);
+      const px = ST.priceNumber(price);
+      if (qty == null || qty <= 0) return { error: "Enter a quantity above zero." };
+      if (px == null || px <= 0) return { error: "Enter a price above zero. It is the price you type, not a quote." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Enter the date for this trade." };
+      const built = ST.tradeFromFields({
+        symbol: symbol,
+        direction: side,
+        status: "open",
+        quantity: quantity,
+        entryPrice: price,
+        entryDate: date
+      });
+      if (built.error) return built;
+      state.data.trades.push(built.trade);
+      state.lastSide = side;
+      state.tab = "dashboard";
+      persist();
+      refresh();
+      ST.showBanner(symbol + " added. The price is the one you typed, not a live quote.");
+      return { ok: true };
+    },
     editTrade: function (id) {
       const trade = findTrade(id);
       if (trade) ST.openTradeDialog(trade, "edit");
@@ -191,6 +221,7 @@
       } else {
         state.data.trades.push(built.trade);
       }
+      if (fields && (fields.direction === "long" || fields.direction === "short")) state.lastSide = fields.direction;
       state.tab = "positions";
       persist();
       refresh();

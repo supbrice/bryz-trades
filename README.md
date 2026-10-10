@@ -1,6 +1,6 @@
 # Bryz Trades
 
-A local-first trading journal for any ticker. Static site, no build step, no account, and no broker connection. The GitHub Pages address stays `sofi-levels-card`.
+A local-first trading journal for any ticker. Static site, no build step, no account, and no broker connection. It is published at <https://supbrice.github.io/bryz-trades/>.
 
 Bryz Trades records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
 
@@ -10,11 +10,11 @@ Nothing on the page loads an outside script or frame. Performance charts on Over
 
 Overview, Symbols, Trades, Risk, Analytics, Calendar, and Settings. On a phone the sections sit in a bottom bar with icons. From 700px the same list is an icon rail, and from 1100px the labels sit beside the icons. The wordmark and the Bryz Trades mark stay in the top bar with the period, Log trade, and the theme button. Type is Inter, self-hosted under `assets/fonts/` (SIL Open Font License, see `assets/fonts/OFL.txt`). Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
 
-The first visit starts with SOFI as an open long at the old checklist levels ($18.00 / $18.00 / $16.92). If this browser still has the previous tracker or the original SOFI card, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
+A first visit starts empty. No sample trade is filled in. If this browser still has the previous tracker, or the original card stored under `sofi-levels-card-v1`, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
 
 ## Symbols, watchlist, and filters
 
-Any ticker or ETF that fits a symbol such as `AAPL`, `BRK.B`, or `SOFI` can be recorded. Symbols also accepts an optional exchange (`NASDAQ`, `NYSE`) stored with the watchlist. A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
+Any ticker or ETF that fits a symbol such as `AAPL` or `BRK.B` can be recorded. Symbols also accepts an optional exchange (`NASDAQ`, `NYSE`) stored with the watchlist. A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
 
 The watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol shows that ticker’s closed P/L, win rate, and trade count, plus open positions with the stops and targets you recorded. There is no live price. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date. A missing mark is unavailable, not a quote.
 
@@ -22,7 +22,15 @@ Trades filter by status, symbol, direction, strategy, and date. A date filter ke
 
 ## Charts
 
-Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity. The page does not load a market-data script or embed.
+Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity. The page does not load a market-data script or embed. There is no live or delayed quote. A price you type is the price you typed. A manual mark used for unrealized P/L is labeled as an estimate.
+
+The performance chart uses 1W, 1M, 3M, YTD, 1Y, All, or a custom start and end. Both custom dates are included. 1W, 1M, 3M, and 1Y run through today. YTD starts on 1 January.
+
+Overview also lists Upcoming from the journal only: open positions with the stops and targets you recorded, entry dates still in the future, and manual days dated after today. It does not invent events.
+
+Return on account is shown only after an account size is saved. It is closed-trade net in the selected range divided by that size. It is not a market return. With no account size, the figure is left off the page.
+
+Log a trade from the top bar, or use the quick row on Overview: symbol, side, quantity, price, and date. Enter saves it. N moves focus there when you are not already typing. The date starts as today, and the side starts as the last side used in this visit. A full edit still holds fees, partial exits, and the rest of the journal.
 
 ## Statuses
 
@@ -139,7 +147,7 @@ Planned risk on Overview is the sum, for open positions, of remaining shares tim
 
 Settings exports a JSON file with `schemaVersion: 3` and `app: "ladder"`, plus CSV files for trades and daily summaries. The downloaded names are `bryz-trades-….json`, `bryz-trades-trades-….csv`, and `bryz-trades-days-….csv`. A file saved earlier as `ladder-….json` still imports. Import reads the file contents, not the file name. Import checks the file first. Schema 2 files are upgraded on import. A malformed file, a duplicate id inside the file, or a schema newer than 3 is rejected and the saved journal is left as it was. Merge skips ids you already have unless you choose overwrite, and it skips closed trades that look the same unless you choose to import them. Manual days on the same date are kept or replaced, never summed. Replace asks you to confirm, and writes a pre-import backup in this browser before it swaps the journal. If that backup cannot be stored, nothing is changed.
 
-The current journal lives in this browser’s local storage (`ladder-journal-v3`). A schema 2 journal under `ladder-journal-v2` is copied forward once. The version 2 text is left in place, and a pre-migration backup is stored under `ladder-journal-premigration-v3` before the new key is written. If that backup cannot be stored, the upgraded journal is not written. Version 1 and the original SOFI card still migrate, with their own pre-migration backup, and are not deleted.
+The current journal lives in this browser’s local storage (`ladder-journal-v3`). A schema 2 journal under `ladder-journal-v2` is copied forward once. The version 2 text is left in place, and a pre-migration backup is stored under `ladder-journal-premigration-v3` before the new key is written. If that backup cannot be stored, the upgraded journal is not written. Version 1 and the original card under `sofi-levels-card-v1` still migrate, with their own pre-migration backup, and are not deleted. Those storage keys stay so a journal saved on this origin is still here.
 
 Another device, another browser, or a private window does not have the journal. There is no cloud sync. Private browsing may drop it when the window closes. Clearing site data deletes it. Export a file first if the numbers matter. Bryz Trades does not send the journal anywhere unless you move an exported file yourself. No API key and no backend are required.
 
@@ -151,7 +159,7 @@ Unit tests use Node’s built-in runner and do not install packages:
 node --test tests/*.test.js
 ```
 
-Browser checks live in `tests/browser.check.js`. The page does not load that folder. They need Playwright and a Chromium build on the machine running them:
+Browser checks live in `tests/browser.check.js`. The page does not load that folder. They open the site under `/bryz-trades/`, the same base path as GitHub Pages. They need Playwright and a Chromium build on the machine running them:
 
 ```sh
 node tests/browser.check.js

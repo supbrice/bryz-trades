@@ -131,7 +131,7 @@
     const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     const where = indexLabel ? indexLabel + ": " : "";
     const symbol = cleanSymbol(src.symbol);
-    if (!validSymbol(symbol)) throw new Error(where + "Enter a ticker like SOFI or BRK.B.");
+    if (!validSymbol(symbol)) throw new Error(where + "Enter a ticker like AAPL or BRK.B.");
     if (!DIRECTIONS[src.direction]) throw new Error(where + symbol + " needs a long or short direction.");
     if (!STATUSES[src.status]) throw new Error(where + symbol + " needs an open, closed, or cancelled status.");
     const exitReason = src.exitReason == null || src.exitReason === "" ? "" : String(src.exitReason);
@@ -310,17 +310,7 @@
   }
 
   function seedJournal() {
-    const journal = emptyJournal();
-    journal.trades.push(cleanTrade({
-      symbol: "SOFI",
-      direction: "long",
-      status: "open",
-      getIn: 18,
-      getOut: 18,
-      hardStop: 16.92,
-      orderStatus: "waiting"
-    }));
-    return journal;
+    return emptyJournal();
   }
 
   function cleanJournal(raw) {

@@ -90,6 +90,7 @@
       const file = this.files && this.files[0];
       this.value = "";
       if (!file) return;
+      ST.showBanner("Reading backup…");
       const reader = new FileReader();
       reader.onload = function () { handlers.importText(String(reader.result || "")); };
       reader.onerror = function () { ST.showBanner("Couldn't read that file.", true); };
@@ -97,6 +98,7 @@
     });
     document.getElementById("riskCalcBtn").addEventListener("click", function () { handlers.calculateRisk(readRisk()); });
     document.getElementById("tradeForm").addEventListener("submit", onTradeSubmit);
+    document.getElementById("quickAdd").addEventListener("submit", onQuickAdd);
     document.getElementById("tradeForm").addEventListener("input", updateTradeChrome);
     document.getElementById("tradeForm").addEventListener("change", updateTradeChrome);
     document.getElementById("tradeEditBtn").addEventListener("click", function () { tradeMode = "edit"; updateTradeChrome(); });
@@ -197,7 +199,20 @@
     });
     document.addEventListener("focusout", hideChartTip);
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") hideChartTip();
+      if (event.key === "Escape") {
+        hideChartTip();
+        return;
+      }
+      if (event.key !== "n" && event.key !== "N") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const el = document.activeElement;
+      const tag = el && el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable)) return;
+      if (document.querySelector("dialog[open]")) return;
+      event.preventDefault();
+      if (state && state.tab !== "dashboard") handlers.setTab("dashboard");
+      const input = document.getElementById("quickSymbol");
+      if (input) input.focus();
     });
     document.querySelectorAll("dialog").forEach(function (dialog) {
       dialog.addEventListener("click", function (event) {
@@ -240,7 +255,7 @@
     document.getElementById("fieldSymbol").value = trade ? trade.symbol : (state && state.data.settings && state.data.settings.selectedSymbol || "");
     document.getElementById("fieldExchange").value = trade ? trade.exchange || "" : (state && state.data.settings && state.data.settings.selectedExchange || "");
     document.getElementById("fieldName").value = trade ? trade.name || "" : "";
-    document.getElementById("fieldDirection").value = trade && trade.direction === "short" ? "short" : "long";
+    document.getElementById("fieldDirection").value = trade ? (trade.direction === "short" ? "short" : "long") : ((state && state.lastSide) || "long");
     document.getElementById("fieldStatus").value = trade ? trade.status : "open";
     setControl("fieldShares", trade && trade.quantity);
     setControl("fieldFees", trade && trade.fees);
@@ -248,7 +263,7 @@
     setControl("fieldAvg", trade && trade.avgCost);
     setControl("fieldTarget", trade && trade.targetPrice);
     setControl("fieldHardStop", trade && trade.hardStop);
-    document.getElementById("fieldEntryDate").value = trade && trade.entryDate || "";
+    document.getElementById("fieldEntryDate").value = trade ? (trade.entryDate || "") : (state && state.today ? ST.dateKey(state.today) : "");
     document.getElementById("fieldExitDate").value = trade && trade.exitDate || "";
     setControl("fieldExit", trade && trade.exitPrice);
     document.getElementById("fieldExitReason").value = trade && trade.exitReason || "";
@@ -357,7 +372,6 @@
 
   function overviewBounds() {
     const preset = state.overviewPreset || "ytd";
-    if (preset === "all") return { start: "", end: "", label: "All dated closes", ready: true };
     if (preset === "custom") {
       const start = state.overviewFrom || "";
       const end = state.overviewTo || "";
@@ -365,8 +379,8 @@
       if (start > end) return { start: start, end: end, label: "Custom range", ready: false, message: "The start date is after the end date." };
       return { start: start, end: end, label: "Custom range", ready: true };
     }
-    const range = ST.rangeForPreset(preset === "month" ? "month" : "ytd", state.today);
-    return { start: range.start, end: range.end, label: range.label, ready: true };
+    const range = ST.rangeForPreset(preset, state.today);
+    return { start: range.start || "", end: range.end || "", label: range.label, ready: true };
   }
 
   function drawDashboard() {
@@ -394,7 +408,14 @@
     const planSub = planned.cents == null
       ? (planned.skipped ? "Stop not recorded" : "No open plan")
       : (planned.equityPercent ? planned.equityPercent + " of account" : "From recorded stops");
-    document.getElementById("dashboardBody").innerHTML =
+    const accountCents = state.data.settings ? ST.parseCents(state.data.settings.accountSize) : null;
+    const showReturn = typeof accountCents === "bigint" && accountCents > 0n;
+    const returnText = showReturn && metrics && typeof metrics.realizedNetCents === "bigint"
+      ? ST.accountReturn(metrics.realizedNetCents, state.data.settings.accountSize)
+      : null;
+    const board = document.getElementById("dashboardBody");
+    board.removeAttribute("aria-busy");
+    board.innerHTML =
       (emptyJournal ? emptyState("No trades recorded yet. Log a trade to see results. Sample numbers are not filled in.") : "") +
       (!emptyJournal && !bounds.ready ? '<p class="empty">' + ST.escapeHtml(bounds.message) + "</p>" : "") +
       (!emptyJournal && bounds.ready && noCloses ? '<p class="empty">No closed trades in this period. Open positions are not shown as profit.</p>' : "") +
@@ -405,18 +426,20 @@
         kpiPlain("Planned risk", planned.cents, planSub, "dashPlanned", "Remaining shares times the distance from the recorded entry to the recorded stop. Missing stops are left out. This is not a live stop.") +
       "</div>" +
       '<div class="quiet-row">' +
+        (showReturn ? quietText("Return on account", returnText, "dashReturn", "Closed-trade net in this period divided by the account size you saved. Not a market return.") : "") +
         quietStat("Unrealized, estimate", books.unrealizedCents, "dashUnrealized", books.unrealizedCents == null ? "price not entered" : "manual mark") +
         quietStat("Today, closed", today.tradeCents, "dashTodayTrades", today.tradeCents == null ? "nothing closed today" : "") +
         quietStat("Today, manual", today.manualCents, "dashTodayManual", today.manualCents == null ? "no manual entry" : "") +
       "</div>" +
       '<div class="overview-board">' +
-        '<section class="chart-card"><div class="card-title"><h3>Equity curve</h3>' + infoBtn("Cumulative closed-trade profit. Not account equity.") + "</div>" +
-          '<p class="hint">Closed trades only. Not account equity.</p>' +
+        '<section class="chart-card"><div class="card-title"><h3>Performance</h3>' + infoBtn("Cumulative closed-trade profit for the selected range. Not account equity, and not a price chart.") + "</div>" +
+          '<p class="hint">' + ST.escapeHtml(bounds.ready ? bounds.label : bounds.message) + ". Closed trades only. Not account equity.</p>" +
           curveSvg(metrics ? metrics.curve : [], metrics) +
         "</section>" +
         '<section class="chart-card side-card ledger"><h3>Recent trades</h3>' + recentTable(bounds) + "</section>" +
-        '<section class="chart-card"><h3>Open positions</h3>' + openCard(openTrades) + "</section>" +
+        '<section class="chart-card" id="upcomingCard"><h3>Upcoming</h3><p class="hint">Open plans and dates already in the journal. Nothing is added from a calendar feed.</p>' + upcomingCard(openTrades) + "</section>" +
       "</div>";
+    syncQuickAdd();
     drawSymbolDetail();
     drawWatchlist();
   }
@@ -486,6 +509,13 @@
     return '<div class="stat" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + value + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
   }
 
+  function quietText(label, text, id, about) {
+    const value = text
+      ? '<div class="value flat">' + ST.escapeHtml(text) + "</div>"
+      : '<div class="value na">N/A</div>';
+    return '<div class="stat quiet" id="' + id + '"><div class="kpi-head"><div class="label">' + ST.escapeHtml(label) + "</div>" + infoBtn(about) + "</div>" + value + '<p class="substat">Saved account size</p></div>';
+  }
+
   function quietStat(label, cents, id, emptyTag) {
     const value = typeof cents !== "bigint"
       ? '<div class="value na">N/A' + (emptyTag ? ' <span class="tag">' + ST.escapeHtml(emptyTag) + "</span>" : "") + "</div>"
@@ -497,13 +527,38 @@
     return '<button type="button" class="info" aria-label="About this figure" data-info="' + ST.escapeHtml(text) + '">i</button>';
   }
 
-  function openCard(openTrades) {
-    if (!openTrades.length) return '<p class="empty">No open positions.</p>';
-    return '<ul class="perf-list">' + openTrades.slice(0, 6).map(function (trade) {
+  function upcomingCard(openTrades) {
+    const today = ST.dateKey(state.today);
+    const items = [];
+    openTrades.forEach(function (trade) {
       const row = ST.positionAccounting(trade);
-      const stop = trade.hardStop == null ? "stop not recorded" : "stop " + ST.formatPlainMoney(trade.hardStop);
-      return "<li><span><strong>" + ST.escapeHtml(trade.symbol) + "</strong> " + ST.escapeHtml(trade.direction === "short" ? "Short" : "Long") +
-        "</span><span>" + ST.escapeHtml(row.remainingQty == null ? "quantity N/A" : ST.formatShares(row.remainingQty) + " left") + " · " + ST.escapeHtml(stop) + "</span></li>";
+      const bits = [];
+      bits.push(trade.direction === "short" ? "Short" : "Long");
+      bits.push(row.remainingQty == null ? "quantity N/A" : ST.formatShares(row.remainingQty) + " left");
+      bits.push(trade.hardStop == null ? "stop not recorded" : "stop " + ST.formatPlainMoney(trade.hardStop));
+      bits.push(trade.targetPrice == null ? "target not recorded" : "target " + ST.formatPlainMoney(trade.targetPrice));
+      if (trade.entryDate && trade.entryDate > today) bits.push("entry " + trade.entryDate);
+      items.push({
+        date: trade.entryDate && trade.entryDate > today ? trade.entryDate : "",
+        title: trade.symbol,
+        detail: bits.join(" · "),
+        kind: "Open plan"
+      });
+    });
+    const days = state.data.days || {};
+    Object.keys(days).sort().forEach(function (key) {
+      if (!key || key <= today) return;
+      const day = days[key];
+      if (!day) return;
+      const note = day.note || day.adjustmentNote || "";
+      if (!note && day.manualPnl == null && day.adjustment == null) return;
+      items.push({ date: key, title: "Recorded day", detail: note || "Manual entry", kind: "Note" });
+    });
+    if (!items.length) return '<p class="empty">Nothing upcoming. Open positions and dates you record will show here.</p>';
+    return '<ul class="perf-list">' + items.slice(0, 8).map(function (item) {
+      return "<li><span><strong>" + ST.escapeHtml(item.title) + "</strong> " + ST.escapeHtml(item.kind) +
+        (item.date ? " · " + ST.escapeHtml(item.date) : "") +
+        "</span><span>" + ST.escapeHtml(item.detail) + "</span></li>";
     }).join("") + "</ul>";
   }
 
@@ -1412,6 +1467,37 @@
     document.getElementById("tradeDialog").close();
   }
 
+  function syncQuickAdd() {
+    const side = document.getElementById("quickSide");
+    const date = document.getElementById("quickDate");
+    if (side && document.activeElement !== side) side.value = (state && state.lastSide) || "long";
+    if (date && !date.value && state && state.today) date.value = ST.dateKey(state.today);
+  }
+
+  function onQuickAdd(event) {
+    event.preventDefault();
+    const result = handlers.quickAdd({
+      symbol: document.getElementById("quickSymbol").value,
+      side: document.getElementById("quickSide").value,
+      quantity: document.getElementById("quickQty").value,
+      price: document.getElementById("quickPrice").value,
+      date: document.getElementById("quickDate").value
+    });
+    const error = document.getElementById("quickError");
+    if (result && result.error) {
+      error.hidden = false;
+      error.textContent = result.error;
+      return;
+    }
+    error.hidden = true;
+    error.textContent = "";
+    document.getElementById("quickSymbol").value = "";
+    document.getElementById("quickQty").value = "";
+    document.getElementById("quickPrice").value = "";
+    const symbol = document.getElementById("quickSymbol");
+    if (symbol) symbol.focus();
+  }
+
   function readTradeFields() {
     return {
       symbol: valueOf("fieldSymbol"),
@@ -1534,7 +1620,7 @@
   function splitRowHtml(row) {
     const symbol = row && row.symbol ? row.symbol : "";
     const amount = row && typeof row.amount === "number" ? String(row.amount) : "";
-    return '<div class="split-row"><input data-symbol aria-label="Manual split ticker" maxlength="10" autocapitalize="characters" value="' + ST.escapeHtml(symbol) + '" placeholder="SOFI" />' +
+    return '<div class="split-row"><input data-symbol aria-label="Manual split ticker" maxlength="10" autocapitalize="characters" value="' + ST.escapeHtml(symbol) + '" placeholder="AAPL" />' +
       '<input data-amount aria-label="Manual split amount" inputmode="decimal" autocomplete="off" placeholder="0.00 or -10" value="' + ST.escapeHtml(amount) + '" />' +
       '<button type="button" class="icon-btn" data-remove-split aria-label="Remove split">×</button></div>';
   }
@@ -1697,7 +1783,7 @@
     return rows;
   }
 
-  const EXCHANGE_HINTS = { AAPL: "NASDAQ", NVDA: "NASDAQ", SOFI: "NASDAQ", TSLA: "NASDAQ", MSFT: "NASDAQ", AMD: "NASDAQ", QQQ: "NASDAQ", SPY: "AMEX" };
+  const EXCHANGE_HINTS = { AAPL: "NASDAQ", NVDA: "NASDAQ", TSLA: "NASDAQ", MSFT: "NASDAQ", AMD: "NASDAQ", QQQ: "NASDAQ", SPY: "AMEX" };
 
   function drawSymbolChrome() {
     const settings = state.data.settings || {};
@@ -1718,7 +1804,7 @@
       hintBtn.hidden = true;
       hintText.textContent = symbol ? "Exchange is saved with the watchlist. It is not a quote." : "Enter a ticker to see its journal.";
     }
-    const symbols = { AAPL: true, NVDA: true, SOFI: true, TSLA: true, MSFT: true };
+    const symbols = { AAPL: true, NVDA: true, TSLA: true, MSFT: true };
     state.data.trades.forEach(function (trade) { if (trade.symbol) symbols[trade.symbol] = true; });
     (settings.watchlist || []).forEach(function (item) { if (item.symbol) symbols[item.symbol] = true; });
     document.getElementById("symbolSuggestions").innerHTML = Object.keys(symbols).sort().map(function (item) {

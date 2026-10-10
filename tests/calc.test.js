@@ -7,7 +7,7 @@ const calc = require("../js/calc.js");
 function closed(overrides) {
   return Object.assign({
     id: "t1",
-    symbol: "SOFI",
+    symbol: "AAPL",
     direction: "long",
     status: "closed",
     quantity: 5,
@@ -245,7 +245,7 @@ test("date keys do not move across a timezone boundary", () => {
     const bounds = calc.monthBounds(2026, 0);
     if (!calc.inDateRange("2026-01-01", bounds.start, bounds.end)) process.exit(4);
     if (calc.inDateRange("2025-12-31", bounds.start, bounds.end)) process.exit(5);
-    const summary = calc.monthSummary({ trades: [{ id: "a", symbol: "SOFI", direction: "long", status: "closed", quantity: 1, entryPrice: 10, exitPrice: 11, exitDate: "2026-01-01", fees: 0 }], days: {} }, 2026, 0, new Date(2026, 0, 31));
+    const summary = calc.monthSummary({ trades: [{ id: "a", symbol: "AAPL", direction: "long", status: "closed", quantity: 1, entryPrice: 10, exitPrice: 11, exitDate: "2026-01-01", fees: 0 }], days: {} }, 2026, 0, new Date(2026, 0, 31));
     if (summary.tradeCents !== 100n) process.exit(6);
   `;
   ["Pacific/Kiritimati", "Pacific/Honolulu", "UTC", "America/New_York"].forEach((tz) => {
@@ -480,4 +480,24 @@ test("a legacy closed trade is unchanged when it has no exit lots", () => {
   assert.equal(calc.tradeResult(trade).netCents, 900n);
   assert.equal(calc.positionAccounting(trade).unrealizedReason, "flat");
   assert.equal(calc.analyze({ trades: [trade] }).realizedNetCents, 900n);
+});
+
+test("performance ranges are trailing windows through today", () => {
+  const today = new Date(2026, 9, 10);
+  assert.deepEqual(calc.rangeForPreset("1w", today), { start: "2026-10-04", end: "2026-10-10", label: "1 week" });
+  assert.deepEqual(calc.rangeForPreset("1m", today), { start: "2026-09-10", end: "2026-10-10", label: "1 month" });
+  assert.deepEqual(calc.rangeForPreset("3m", today), { start: "2026-07-10", end: "2026-10-10", label: "3 months" });
+  assert.deepEqual(calc.rangeForPreset("1y", today), { start: "2025-10-10", end: "2026-10-10", label: "1 year" });
+  assert.equal(calc.rangeForPreset("ytd", today).start, "2026-01-01");
+  assert.equal(calc.rangeForPreset("ytd", today).end, "2026-10-10");
+  assert.equal(calc.rangeForPreset("all", today).start, null);
+  assert.equal(calc.rangeForPreset("1m", new Date(2026, 2, 31)).start, "2026-02-28");
+});
+
+test("account return uses a saved account size and stays blank without one", () => {
+  assert.equal(calc.accountReturn(800n, null), null);
+  assert.equal(calc.accountReturn(800n, 0), null);
+  assert.equal(calc.accountReturn(null, 10000), null);
+  assert.equal(calc.accountReturn(800n, 10000), "0.08%");
+  assert.equal(calc.accountReturn(-800n, 10000), "-0.08%");
 });

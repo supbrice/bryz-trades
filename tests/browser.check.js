@@ -57,7 +57,7 @@ function ymd(date) {
 function serve() {
   const server = http.createServer(function (req, res) {
     const urlPath = decodeURIComponent(req.url.split("?")[0]);
-    const prefix = "/sofi-levels-card";
+    const prefix = "/bryz-trades";
     let stripped = urlPath;
     if (stripped === prefix || stripped === prefix + "/") stripped = "/";
     else if (stripped.startsWith(prefix + "/")) stripped = stripped.slice(prefix.length);
@@ -98,9 +98,9 @@ function demoJournal(now) {
     settings: { accountSize: 25000, riskPercent: 1 },
     trades: [
       {
-        id: "sofi",
-        symbol: "SOFI",
-        name: "SoFi",
+        id: "shop",
+        symbol: "SHOP",
+        name: "Shopify",
         direction: "long",
         status: "open",
         quantity: 40,
@@ -378,7 +378,7 @@ async function main() {
   fs.mkdirSync(shotDir, { recursive: true });
   fs.mkdirSync(fullShotDir, { recursive: true });
   const server = await serve();
-  const url = "http://127.0.0.1:" + server.address().port + "/";
+  const url = "http://127.0.0.1:" + server.address().port + "/bryz-trades/";
   const browser = await chromium.launch({ headless: true });
   const now = new Date();
   const today = ymd(now);
@@ -386,6 +386,9 @@ async function main() {
     await runFlow(browser, url, today, { width: 390, height: 844 }, "phone");
     await runFlow(browser, url, today, { width: 768, height: 1024 }, "tablet");
     await runFlow(browser, url, today, { width: 1440, height: 900 }, "desktop");
+    await runPremium(browser, url, today, { width: 390, height: 844 }, "phone");
+    await runPremium(browser, url, today, { width: 768, height: 1024 }, "tablet");
+    await runPremium(browser, url, today, { width: 1440, height: 900 }, "desktop");
     await runMigration(browser, url);
     await runImports(browser, url, today);
     await runLarge(browser, url, today);
@@ -402,6 +405,133 @@ async function main() {
   }
 }
 
+async function runPremium(browser, url, today, viewport, label) {
+  const context = await browser.newContext({ viewport: viewport, acceptDownloads: true });
+  await context.addInitScript(function () {
+    if (localStorage.getItem("ladder-refresh-ready") === "1") return;
+    localStorage.clear();
+    localStorage.setItem("stock-tracker-theme", "dark");
+  });
+  const page = await context.newPage();
+  const errors = [];
+  watchOrigin(page, errors, new URL(url).origin);
+  page.on("pageerror", function (err) { errors.push(String(err && err.message || err)); });
+  page.on("console", function (msg) {
+    if (msg.type() !== "error") return;
+    errors.push("console: " + msg.text());
+  });
+  page.on("dialog", function (dialog) { dialog.accept(); });
+  page.setDefaultTimeout(15000);
+  try {
+    await page.goto(url, { waitUntil: "load" });
+    await page.waitForSelector("#quickSymbol");
+    await shows(page, "#upcomingCard", "Nothing upcoming");
+    assert(await page.locator("#dashReturn").count() === 0, label + " return hidden");
+    const presets = await page.locator("#overviewPreset option").evaluateAll(function (nodes) {
+      return nodes.map(function (node) { return node.value; }).join(",");
+    });
+    assert(presets === "1w,1m,3m,ytd,1y,all,custom", label + " ranges " + presets);
+    await page.keyboard.press("n");
+    const focused = await page.evaluate(function () { return document.activeElement && document.activeElement.id; });
+    assert(focused === "quickSymbol", label + " N focused " + focused);
+
+    await page.locator("#quickSymbol").fill("??");
+    await page.locator("#quickQty").fill("1");
+    await page.locator("#quickPrice").fill("10");
+    await page.locator("#quickSave").click();
+    await shows(page, "#quickError", "AAPL");
+
+    await page.locator("#quickSymbol").fill("PART");
+    await page.locator("#quickSide").selectOption("long");
+    await page.locator("#quickQty").fill("10");
+    await page.locator("#quickPrice").fill("20");
+    await page.locator("#quickDate").fill(today);
+    await page.locator("#quickPrice").press("Enter");
+    await shows(page, "#upcomingCard", "PART");
+    await shows(page, "#upcomingCard", "stop not recorded");
+    assert(await page.locator("#quickSide").inputValue() === "long", label + " side stays long");
+
+    await page.evaluate(function () { localStorage.setItem("ladder-refresh-ready", "1"); });
+    await page.reload({ waitUntil: "load" });
+    await page.waitForSelector("#upcomingCard");
+    await shows(page, "#upcomingCard", "PART");
+
+    await page.getByRole("tab", { name: "Trades" }).click();
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^PART/ }) }).getByRole("button", { name: "Edit" }).click();
+    await page.locator("#partialDetails summary").click();
+    await page.locator("#addExitBtn").click();
+    await page.locator(".exit-qty").fill("4");
+    await page.locator(".exit-price").fill("22");
+    await page.locator(".exit-date").fill(today);
+    await page.locator(".exit-fees").fill("0");
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "partially exited");
+    await shows(page, "#positionsList", "+$8.00");
+
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await page.locator("#quickSymbol").fill("DONE");
+    await page.locator("#quickSide").selectOption("short");
+    await page.locator("#quickQty").fill("1");
+    await page.locator("#quickPrice").fill("5");
+    await page.locator("#quickDate").fill(today);
+    await page.locator("#quickSave").click();
+    assert(await page.locator("#quickSide").inputValue() === "short", label + " last side");
+    await page.getByRole("tab", { name: "Trades" }).click();
+    await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^DONE/ }) }).getByRole("button", { name: "Close" }).click();
+    await page.locator("#fieldExit").fill("4");
+    await page.locator("#fieldExitDate").fill(today);
+    await page.locator("#tradeSaveBtn").click();
+    await shows(page, "#positionsList", "Closed — recorded exit");
+
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("1w");
+    await shows(page, "#dashboardBody", "1 week");
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("all");
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("custom");
+    await shows(page, "#dashboardBody", "Choose a start");
+    await page.locator("#overviewFrom").fill(today);
+    await page.locator("#overviewTo").fill(today);
+    await shows(page, "#dashRealized", "+$9.00");
+    await page.locator("#overviewPreset").selectOption("ytd");
+
+    await page.getByRole("tab", { name: "Analytics" }).click();
+    await shows(page, "#metric-realized", "+$9.00");
+    await shows(page, "#analyticsBody", "not account equity");
+
+    await page.getByRole("tab", { name: "Risk" }).click();
+    await page.locator("#riskAccount").fill("10000");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("50");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskRemember").check();
+    await page.getByRole("button", { name: "Calculate size" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await shows(page, "#dashReturn", "%");
+    await shows(page, "#dashReturn", "account");
+
+    await page.getByRole("tab", { name: "Settings" }).click();
+    const jsonDownload = page.waitForEvent("download");
+    await page.locator("#exportJsonBtn").click();
+    const jsonFile = await jsonDownload;
+    assert(jsonFile.suggestedFilename().indexOf("bryz-trades-") === 0, jsonFile.suggestedFilename());
+    const csvDownload = page.waitForEvent("download");
+    await page.locator("#exportTradesCsvBtn").click();
+    const csvFile = await csvDownload;
+    assert(csvFile.suggestedFilename().indexOf("bryz-trades-trades-") === 0, csvFile.suggestedFilename());
+
+    assert(await page.locator("iframe").count() === 0, label + " frames");
+    assert(await page.locator("script[src^='http']").count() === 0, label + " outside scripts");
+    await noOverflow(page, label + " premium");
+    if (errors.length) throw new Error(errors.join("\n"));
+    console.log("premium passed", label);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runFlow(browser, url, today, viewport, label) {
   const opened = await openPage(browser, url, viewport, "dark", null);
   const page = opened.page;
@@ -413,9 +543,11 @@ async function runFlow(browser, url, today, viewport, label) {
     await assertBrand(page);
     await assertMainLayout(page, label);
     await assertMobileChrome(page, label);
+    await shows(page, "#dashboardBody", "No trades recorded yet");
+    await shows(page, "#upcomingCard", "Nothing upcoming");
+    assert(await page.locator("#dashReturn").count() === 0, "return without account size");
     await page.getByRole("tab", { name: "Trades" }).click();
-    await shows(page, "#positionsList", "SOFI");
-    await shows(page, "#positionsList", "Open — not realized");
+    await shows(page, "#positionsList", "No trades yet");
     await page.locator("#addTradeBtn").click();
     await page.locator("#fieldSymbol").fill("TEST");
     await page.locator("#fieldStatus").selectOption("closed");
@@ -457,7 +589,8 @@ async function runFlow(browser, url, today, viewport, label) {
     await page.getByRole("tab", { name: "Overview" }).click();
     await shows(page, "#dashRealized", "+$4.00");
     const openText = await page.locator("#dashOpen").innerText();
-    assert(openText.includes("2") || openText.includes("3"), "open count should include BIG and SOFI, was " + openText);
+    assert(openText.includes("1"), "open count should be the one open trade, was " + openText);
+    assert(!openText.includes("SHOP") && !openText.includes("SOFI"), "no seeded ticker in " + openText);
 
     await page.getByRole("tab", { name: "Analytics" }).click();
     await shows(page, "#analyticsBody", "+$4.00");
@@ -528,8 +661,8 @@ async function runMigration(browser, url) {
     localStorage.clear();
     localStorage.setItem("stock-tracker-v1", JSON.stringify({
       version: 1,
-      tickers: [{ id: "sof", symbol: "SOFI", shares: 10, avgCost: 18, notes: "from before", getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "filled", fillPrice: 18, close: 16 }],
-      days: { "2026-01-05": { pnl: 25.5, note: "old manual", breakdown: [{ tickerId: "sof", symbol: "SOFI", amount: 25.5 }] } }
+      tickers: [{ id: "sof", symbol: "AAPL", shares: 10, avgCost: 18, notes: "from before", getIn: 18, getOut: 18, hardStop: 16.92, orderStatus: "filled", fillPrice: 18, close: 16 }],
+      days: { "2026-01-05": { pnl: 25.5, note: "old manual", breakdown: [{ tickerId: "sof", symbol: "AAPL", amount: 25.5 }] } }
     }));
   });
   const page = await context.newPage();
@@ -696,7 +829,7 @@ async function runUniversal(browser, url, today) {
     assert(stored.v2 === raw, "v2 copy survives the upgrade");
     assert(stored.v3.schemaVersion === 3, "journal is schema 3");
     assert(stored.backup && stored.backup.includes("before-schema-v3-migration"), "v3 premigration backup");
-    assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SOFI" && trade.status === "open"; }), "SOFI survived");
+    assert(stored.v3.trades.some(function (trade) { return trade.symbol === "SHOP" && trade.status === "open"; }), "open symbol survived");
 
     await page.getByRole("tab", { name: "Trades" }).click();
     await page.locator("#addTradeBtn").click();
@@ -736,7 +869,7 @@ async function runUniversal(browser, url, today) {
     await shows(page, "#positionsList", "AAPL");
     const filtered = await page.locator("#positionsList").innerText();
     assert(!filtered.includes("MSFT"), "symbol filter hid MSFT");
-    assert(!filtered.includes("SOFI"), "symbol filter hid SOFI");
+    assert(!filtered.includes("SHOP"), "symbol filter hid SHOP");
     await page.locator("#positionSymbol").fill("");
 
     await page.locator(".stock-card", { has: page.getByRole("heading", { name: /^NVDA/ }) }).getByRole("button", { name: "Delete" }).click();
@@ -761,9 +894,9 @@ async function runSymbols(browser, url) {
   page.setDefaultTimeout(15000);
   try {
     await page.getByRole("tab", { name: "Symbols" }).click();
-    await shows(page, "#watchlistBody", "SOFI");
+    await shows(page, "#watchlistBody", "SHOP");
     await shows(page, "#watchlistBody", "AAPL");
-    await shows(page, "#symbolDetailBody", "SOFI");
+    await shows(page, "#symbolDetailBody", "SHOP");
     await shows(page, "#symbolDetailBody", "Win rate");
     await shows(page, "#symbolDetailBody", "Closed P/L");
     await shows(page, "#symbolDetailBody", "$16.92");
@@ -775,7 +908,7 @@ async function runSymbols(browser, url) {
     assert(await page.locator("iframe").count() === 0, "no frames");
     assert(await page.locator("script[src^='http']").count() === 0, "no outside scripts");
     const journalAfter = await page.evaluate(function () { return localStorage.getItem("ladder-journal-v3"); });
-    assert(journalAfter && journalAfter.includes("\"symbol\":\"SOFI\""), "symbol view changed the journal");
+    assert(journalAfter && journalAfter.includes("\"symbol\":\"SHOP\""), "symbol view changed the journal");
     if (page.errors.length) throw new Error(page.errors.join("\n"));
     console.log("symbols view passed");
   } finally {
@@ -848,7 +981,7 @@ async function runPreserve(browser, url) {
 }
 
 async function runPagesBase(browser, url) {
-  const opened = await openPage(browser, url + "sofi-levels-card/", { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
+  const opened = await openPage(browser, url, { width: 390, height: 844 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
   const page = opened.page;
   try {
     assert((await page.locator("h1").innerText()) === "Bryz Trades", "pages base title");
@@ -1022,23 +1155,23 @@ function proJournal(now) {
     ["01-22", "NVDA", "long", 4, 130, 142, 1.25, "momentum"],
     ["02-03", "TSLA", "short", 3, 240, 228, 1, "fade"],
     ["02-12", "AMD", "long", 8, 150, 150, 0, "range"],
-    ["02-20", "SOFI", "long", 20, 16, 14.5, 0.4, "breakout"],
+    ["02-20", "META", "long", 20, 16, 14.5, 0.4, "breakout"],
     ["03-04", "QQQ", "long", 5, 480, 496, 1, "trend"],
     ["03-18", "AAPL", "long", 8, 185, 191, 1, "breakout"],
     ["04-02", "NVDA", "short", 2, 140, 148, 0.8, "fade"],
     ["04-16", "MSFT", "long", 4, 410, 424, 1, "trend"],
     ["05-06", "AMD", "long", 10, 155, 149, 1, "pullback"],
-    ["05-21", "SOFI", "long", 30, 15, 17.2, 0.6, "breakout"],
+    ["05-21", "META", "long", 30, 15, 17.2, 0.6, "breakout"],
     ["06-09", "TSLA", "long", 4, 220, 236, 1.2, "momentum"],
     ["06-24", "QQQ", "long", 3, 500, 508, 0.8, "trend"],
     ["07-08", "AAPL", "long", 12, 195, 202, 1.4, "breakout"],
     ["07-22", "NVDA", "long", 3, 145, 138, 0.9, "momentum"],
     ["08-05", "MSFT", "short", 2, 430, 418, 1, "fade"],
     ["08-19", "AMD", "long", 6, 160, 171, 0.7, "range"],
-    ["09-03", "SOFI", "long", 25, 17, 18.4, 0.5, "breakout"],
+    ["09-03", "META", "long", 25, 17, 18.4, 0.5, "breakout"],
     ["09-17", "QQQ", "long", 4, 520, 512, 1, "trend"],
     ["09-30", "TSLA", "long", 3, 250, 261, 1, "momentum"],
-    ["10-01", "SOFI", "long", 15, 18, 19.1, 0.4, "breakout"],
+    ["10-01", "META", "long", 15, 18, 19.1, 0.4, "breakout"],
     ["10-02", "AAPL", "long", 6, 200, 196, 1, "pullback"],
     ["10-05", "NVDA", "long", 2, 150, 146, 0.8, "momentum"],
     ["10-06", "MSFT", "long", 3, 420, 428, 1, "trend"],
