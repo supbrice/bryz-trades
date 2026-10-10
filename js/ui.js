@@ -97,6 +97,11 @@
       reader.readAsText(file);
     });
     document.getElementById("riskCalcBtn").addEventListener("click", function () { handlers.calculateRisk(readRisk()); });
+    const sizeForm = document.getElementById("sizeForm");
+    if (sizeForm) sizeForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      handlers.calculateRisk(readSize());
+    });
     document.getElementById("tradeForm").addEventListener("submit", onTradeSubmit);
     document.getElementById("quickAdd").addEventListener("submit", onQuickAdd);
     document.getElementById("tradeForm").addEventListener("input", updateTradeChrome);
@@ -256,6 +261,7 @@
     document.getElementById("fieldExchange").value = trade ? trade.exchange || "" : (state && state.data.settings && state.data.settings.selectedExchange || "");
     document.getElementById("fieldName").value = trade ? trade.name || "" : "";
     document.getElementById("fieldDirection").value = trade ? (trade.direction === "short" ? "short" : "long") : ((state && state.lastSide) || "long");
+    document.getElementById("fieldAsset").value = trade && (trade.assetType === "call" || trade.assetType === "put") ? trade.assetType : "equity";
     document.getElementById("fieldStatus").value = trade ? trade.status : "open";
     setControl("fieldShares", trade && trade.quantity);
     setControl("fieldFees", trade && trade.fees);
@@ -403,11 +409,9 @@
     const spark = sparkSvg(metrics && metrics.curve);
     const delta = deltaHtml(bounds, metrics);
     const aside = (spark || delta) ? '<div class="kpi-aside">' + spark + delta + "</div>" : "";
-    const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + "W · " + metrics.losses + "L · " + metrics.breakevens + " flat");
-    const openSub = openTrades.length ? "Not realized" : "None open";
-    const planSub = planned.cents == null
-      ? (planned.skipped ? "Stop not recorded" : "No open plan")
-      : (planned.equityPercent ? planned.equityPercent + " of account" : "From recorded stops");
+    const winSub = noCloses ? "No closed trades in this period" : (metrics.wins + " / " + metrics.tradeCount + " trades");
+    const capital = ST.activeCapitalAtRisk(state.data);
+    const expect = bounds.ready ? ST.expectancy(metrics) : { ready: false, reason: "Not enough closed trades.", rr: null, perTradeCents: null };
     const accountCents = state.data.settings ? ST.parseCents(state.data.settings.accountSize) : null;
     const showReturn = typeof accountCents === "bigint" && accountCents > 0n;
     const returnText = showReturn && metrics && typeof metrics.realizedNetCents === "bigint"
@@ -420,10 +424,10 @@
       (!emptyJournal && !bounds.ready ? '<p class="empty">' + ST.escapeHtml(bounds.message) + "</p>" : "") +
       (!emptyJournal && bounds.ready && noCloses ? '<p class="empty">No closed trades in this period. Open positions are not shown as profit.</p>' : "") +
       '<div class="primary-metrics">' +
-        kpi("Realized P/L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodLine, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. This is not account equity.", aside) +
-        kpiText("Win rate", metrics && metrics.winRate, winSub, "dashWinRate", "Wins divided by wins, losses, and breakevens. A breakeven is a net of zero and is not a win.") +
-        kpiText("Open positions", String(openTrades.length), openSub, "dashOpen", "Positions still open. They are excluded from realized profit.") +
-        kpiPlain("Planned risk", planned.cents, planSub, "dashPlanned", "Remaining shares times the distance from the recorded entry to the recorded stop. Missing stops are left out. This is not a live stop.") +
+        kpi("Total Realized P&L", metrics ? metrics.realizedNetCents : null, noCloses ? "No closed trades in this period" : periodLine, "dashRealized", true, "Sum of net profit on closed trades with an exit date in the period. Fees are subtracted. Call and Put use a 100-share multiplier. This is not account equity.", aside) +
+        winRateCard(metrics, winSub) +
+        expectancyCard(expect) +
+        capitalCard(capital, planned, openTrades.length) +
       "</div>" +
       '<div class="quiet-row">' +
         (showReturn ? quietText("Return on account", returnText, "dashReturn", "Closed-trade net in this period divided by the account size you saved. Not a market return.") : "") +
@@ -442,6 +446,52 @@
     syncQuickAdd();
     drawSymbolDetail();
     drawWatchlist();
+  }
+
+  function winRateCard(metrics, sub) {
+    const text = metrics && metrics.winRate ? metrics.winRate : "";
+    const value = text
+      ? '<div class="kpi-main">' + winRing(metrics) + '<div class="value flat">' + ST.escapeHtml(text) + "</div></div>"
+      : '<div class="value na">N/A</div>';
+    return '<div class="stat" id="dashWinRate"><div class="kpi-head"><div class="label">Win Rate</div>' + infoBtn("Wins divided by wins, losses, and breakevens in this period. A breakeven is a net of zero and is not a win.") + "</div>" + value + '<p class="substat">' + ST.escapeHtml(sub || "") + "</p></div>";
+  }
+
+  function winRing(metrics) {
+    if (!metrics || !metrics.tradeCount) return "";
+    const ratio = metrics.wins / metrics.tradeCount;
+    const radius = 14;
+    const circ = 2 * Math.PI * radius;
+    const dash = (ratio * circ).toFixed(2);
+    return '<svg class="win-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ring-track" cx="18" cy="18" r="14"></circle><circle class="ring-value" cx="18" cy="18" r="14" stroke-dasharray="' + dash + " " + circ.toFixed(2) + '"></circle></svg>';
+  }
+
+  function expectancyCard(expect) {
+    if (!expect || !expect.ready) {
+      return '<div class="stat" id="dashExpectancy"><div class="kpi-head"><div class="label">Expectancy</div>' + infoBtn("Average win divided by average loss, from closed trades in this period only. The dollar line is average net per closed trade. Open positions are not included.") + '</div><div class="value na">N/A</div><p class="substat">' + ST.escapeHtml((expect && expect.reason) || "Not enough closed trades.") + "</p></div>";
+    }
+    const rr = expect.rr
+      ? '<div class="value flat">' + ST.escapeHtml(expect.rr) + " R:R</div>"
+      : '<div class="value na">R:R N/A</div>';
+    const per = typeof expect.perTradeCents === "bigint"
+      ? ST.formatCents(expect.perTradeCents) + " per closed trade"
+      : "N/A per closed trade";
+    const extra = expect.rr ? "" : " " + (expect.reason || "");
+    return '<div class="stat" id="dashExpectancy"><div class="kpi-head"><div class="label">Expectancy</div>' + infoBtn("R:R is average win divided by the size of the average loss. The dollar figure is net closed-trade P/L divided by the number of closed trades in this period.") + "</div>" + rr + '<p class="substat">' + ST.escapeHtml(per + extra) + "</p></div>";
+  }
+
+  function capitalCard(capital, planned, openCount) {
+    const about = "Sum of entry price times shares still open. Call and Put multiply by 100. Shorts use the recorded proceeds, not a margin rate. This is not a live price.";
+    const openLine = openCount ? (openCount + " open position" + (openCount === 1 ? "" : "s")) : "No open positions";
+    if (!capital || capital.empty) {
+      return '<div class="stat" id="dashCapital"><div class="kpi-head"><div class="label">Active Capital at Risk</div>' + infoBtn(about) + '</div><div class="value na">N/A</div><p class="substat" id="dashOpen">' + ST.escapeHtml(openLine) + "</p></div>";
+    }
+    let plan = "";
+    if (planned && typeof planned.cents === "bigint") {
+      plan = " Planned risk " + ST.formatCents(planned.cents, "plain") + " from recorded stops.";
+    } else if (planned && planned.skipped) {
+      plan = " Planned risk left blank where a stop is missing.";
+    }
+    return '<div class="stat" id="dashCapital"><div class="kpi-head"><div class="label">Active Capital at Risk</div>' + infoBtn(about) + '</div><div class="value flat">' + ST.escapeHtml(ST.formatCents(capital.cents, "plain")) + '</div><p class="substat">Committed cost basis of open positions.</p><p class="substat" id="dashOpen">' + ST.escapeHtml(openLine + "." + plan) + "</p></div>";
   }
 
   function kpi(label, cents, sub, id, hero, about, extra) {
@@ -573,17 +623,22 @@
           if (!event || event.reason !== "realized") return;
           if (bounds.ready && bounds.start && event.exitDate < bounds.start) return;
           if (bounds.ready && bounds.end && event.exitDate > bounds.end) return;
-          rows.push(tableRow(trade.symbol, trade.direction, exit.date, exit.quantity, entry, exit.price, event.netCents, "Closed"));
+          const badge = ST.moneyBadge(event.netCents);
+          rows.push(tableRow(trade, exit.date, entry, exit.price, null, event.netCents, event.returnPercent, badge));
         });
+        const books = ST.positionAccounting(trade);
+        if (trade.status === "open" && books.remainingQty != null && books.remainingQty > 0) {
+          rows.push(tableRow(trade, trade.entryDate || "", entry, null, trade.targetPrice, null, null, ST.statusBadge(trade)));
+        }
         return;
       }
       const result = ST.tradeResult(trade);
       if (result.reason === "realized") {
         if (bounds.ready && bounds.start && result.exitDate < bounds.start) return;
         if (bounds.ready && bounds.end && result.exitDate > bounds.end) return;
-        rows.push(tableRow(trade.symbol, trade.direction, result.exitDate, trade.quantity, entry, trade.exitPrice, result.netCents, "Closed"));
+        rows.push(tableRow(trade, result.exitDate, entry, trade.exitPrice, null, result.netCents, result.returnPercent, ST.moneyBadge(result.netCents)));
       } else if (trade.status === "open") {
-        rows.push(tableRow(trade.symbol, trade.direction, trade.entryDate || "", trade.quantity, entry, null, null, "Open"));
+        rows.push(tableRow(trade, trade.entryDate || "", entry, null, trade.targetPrice, null, null, ST.statusBadge(trade)));
       }
     });
     rows.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
@@ -592,21 +647,40 @@
     if (!shown.length) return '<p class="empty">No trades in this period. A blank result is not shown as zero.</p>';
     const body = shown.map(function (row) {
       const net = row.net == null ? '<span class="na">N/A</span>' : '<span class="' + ST.pnlWord(row.net) + '">' + ST.escapeHtml(ST.formatCents(row.net)) + "</span>";
-      const exit = row.exit == null ? '<span class="na">N/A</span>' : ST.escapeHtml(ST.formatPlainMoney(row.exit));
-      return "<tr><td data-label=\"Ticker\">" + ST.escapeHtml(row.symbol) + "</td>" +
-        "<td data-label=\"Side\">" + ST.escapeHtml(row.side) + "</td>" +
-        "<td data-label=\"Date\">" + ST.escapeHtml(row.date || "N/A") + "</td>" +
-        '<td class="num" data-label="Qty">' + ST.escapeHtml(row.qty == null ? "N/A" : ST.formatShares(row.qty)) + "</td>" +
+      const exit = row.exit != null
+        ? ST.escapeHtml(ST.formatPlainMoney(row.exit))
+        : (row.target != null ? "target " + ST.escapeHtml(ST.formatPlainMoney(row.target)) : '<span class="na">N/A</span>');
+      const ret = row.ret ? ST.escapeHtml(row.ret) : '<span class="na">N/A</span>';
+      return "<tr><td data-label=\"Date\">" + ST.escapeHtml(row.date || "N/A") + "</td>" +
+        "<td data-label=\"Symbol\">" + ST.escapeHtml(row.symbol) + "</td>" +
+        "<td data-label=\"Type\">" + ST.escapeHtml(row.type) + "</td>" +
         '<td class="num" data-label="Entry">' + ST.escapeHtml(row.entry == null ? "N/A" : ST.formatPlainMoney(row.entry)) + "</td>" +
-        '<td class="num" data-label="Exit">' + exit + "</td>" +
-        '<td class="num" data-label="Net">' + net + "</td>" +
-        "<td data-label=\"Status\">" + ST.escapeHtml(row.status) + "</td></tr>";
+        '<td class="num" data-label="Exit/Target">' + exit + "</td>" +
+        '<td class="num" data-label="P&L">' + net + "</td>" +
+        '<td class="num" data-label="Return">' + ret + "</td>" +
+        '<td data-label="Status">' + badgeSpan(row.badge) + "</td></tr>";
     }).join("");
-    return '<div class="trade-scroll"><table class="trade-table"><thead><tr><th>Ticker</th><th>Side</th><th>Date</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Exit</th><th class="num">Net</th><th>Status</th></tr></thead><tbody>' + body + "</tbody></table></div>";
+    return '<div class="trade-scroll"><table class="trade-table terminal-table"><thead><tr><th>Date</th><th>Symbol</th><th>Type</th><th class="num">Entry</th><th class="num">Exit/Target</th><th class="num">P&L ($)</th><th class="num">Return (%)</th><th>Status</th></tr></thead><tbody>' + body + "</tbody></table></div>";
   }
 
-  function tableRow(symbol, direction, date, qty, entry, exit, net, status) {
-    return { symbol: symbol, side: direction === "short" ? "Short" : "Long", date: date || "", qty: qty, entry: entry, exit: exit, net: net, status: status };
+  function tableRow(trade, date, entry, exit, target, net, ret, badge) {
+    return {
+      symbol: trade.symbol,
+      type: ST.assetLabel(trade),
+      date: date || "",
+      entry: entry,
+      exit: exit,
+      target: target,
+      net: net,
+      ret: ret,
+      badge: badge
+    };
+  }
+
+  function badgeSpan(badge) {
+    const tone = badge && badge.tone ? badge.tone : "flat";
+    const label = badge && badge.label ? badge.label : "CLOSED";
+    return '<span class="badge badge-' + tone + '">' + ST.escapeHtml(label) + "</span>";
   }
 
   function drawPositions() {
@@ -688,7 +762,8 @@
         ? '<span class="' + ST.pnlWord(result.netCents) + '">' + ST.escapeHtml(ST.formatCents(result.netCents)) + "</span>"
         : '<span class="na">N/A</span>';
       const side = trade.direction === "short" ? "Short" : "Long";
-      const status = books.partial ? "Open — partially exited" : help.summary;
+      const badge = ST.statusBadge(trade);
+      const status = badge.note || (books.partial ? "Open — partially exited" : help.summary);
       const notes = [];
       if (trade.name) notes.push(trade.name);
       if (books.partial || (trade.exits && trade.exits.length)) {
@@ -706,7 +781,8 @@
           (checklist ? '<p class="pill ' + checklist.kind + '">' + ST.escapeHtml(checklist.text) + "</p>" : "") +
           (notes.length ? '<p class="meta">' + ST.escapeHtml(notes.join(" ")) + "</p>" : "") +
         "</td>" +
-        '<td data-label="Status"><span class="pill ' + trade.status + '">' + ST.escapeHtml(status) + "</span></td>" +
+        '<td data-label="Type">' + ST.escapeHtml(ST.assetLabel(trade)) + "</td>" +
+        '<td data-label="Status">' + badgeSpan(badge) + '<span class="status-note">' + ST.escapeHtml(status) + "</span></td>" +
         '<td data-label="Date">' + ST.escapeHtml(tradeDate(trade) || "N/A") + "</td>" +
         '<td class="num" data-label="Qty">' + ST.escapeHtml(trade.quantity == null ? "N/A" : ST.formatShares(trade.quantity)) + "</td>" +
         '<td class="num" data-label="Entry">' + ST.escapeHtml(entry == null ? "N/A" : ST.formatPlainMoney(entry)) + "</td>" +
@@ -718,9 +794,9 @@
           '<button type="button" data-remove="' + ST.escapeHtml(trade.id) + '">Delete</button>' +
         "</div></td></tr>";
     }).join("");
-    return '<div class="trade-scroll book-scroll"><table class="trade-table book"><thead><tr>' +
+    return '<div class="trade-scroll book-scroll"><table class="trade-table book terminal-table"><thead><tr>' +
       sortHead("symbol", "Ticker") +
-      "<th>Status</th>" +
+      "<th>Type</th><th>Status</th>" +
       sortHead("date", "Date") +
       '<th class="num">Qty</th><th class="num">Entry</th><th class="num">Exit</th>' +
       sortHead("net", "Net", true) +
@@ -771,7 +847,8 @@
       : (trade.status === "open" ? '<p class="meta">Unrealized P/L: N/A until you enter a manual mark.</p>' : "");
     return '<article class="stock-card"><h3>' + ST.escapeHtml(trade.symbol) +
       ' <span class="dir">' + (trade.direction === "short" ? "Short" : "Long") + "</span></h3>" +
-      '<p class="pill ' + trade.status + '">' + ST.escapeHtml(books.partial ? "Open — partially exited" : help.summary) + "</p>" +
+      '<p>' + badgeSpan(ST.statusBadge(trade)) + "</p>" +
+      '<p class="status-note">' + ST.escapeHtml((ST.statusBadge(trade).note) || (books.partial ? "Open — partially exited" : help.summary)) + "</p>" +
       '<p class="card-notes">' + ST.escapeHtml(help.detail) + "</p>" +
       '<p class="meta">' + ST.escapeHtml(bits.join(" · ")) + "</p>" +
       (plans.length ? '<p class="levels">' + ST.escapeHtml(plans.join(" · ")) + "</p>" : "") +
@@ -1507,6 +1584,7 @@
       markPrice: valueOf("fieldMark"),
       markAsOf: valueOf("fieldMarkAsOf"),
       direction: valueOf("fieldDirection"),
+      assetType: valueOf("fieldAsset"),
       status: valueOf("fieldStatus"),
       quantity: valueOf("fieldShares"),
       fees: valueOf("fieldFees"),
@@ -1658,8 +1736,21 @@
       entryPrice: document.getElementById("riskEntry").value,
       stopPrice: document.getElementById("riskStop").value,
       direction: document.getElementById("riskDirection").value,
+      assetType: document.getElementById("riskAsset").value,
       targetPrice: document.getElementById("riskTarget").value,
-      remember: document.getElementById("riskRemember").checked
+      remember: document.getElementById("riskRemember").checked,
+      resultId: "riskResult"
+    };
+  }
+
+  function readSize() {
+    return {
+      accountSize: document.getElementById("sizeCapital").value,
+      riskPercent: document.getElementById("sizeRisk").value,
+      entryPrice: document.getElementById("sizeEntry").value,
+      stopPrice: document.getElementById("sizeStop").value,
+      assetType: document.getElementById("sizeAsset").value,
+      resultId: "sizeResult"
     };
   }
 

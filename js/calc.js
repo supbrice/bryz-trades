@@ -198,14 +198,16 @@
     return null;
   }
 
-  function grossPnlCents(direction, entryPrice, exitPrice, quantity) {
+  function grossPnlCents(direction, entryPrice, exitPrice, quantity, multiplier) {
     if (direction !== "long" && direction !== "short") return null;
     const entry = money.parsePriceTicks(entryPrice);
     const exit = money.parsePriceTicks(exitPrice);
     const qty = money.parseQtyTicks(quantity);
     if (entry == null || exit == null || qty == null) return null;
+    const mult = multiplier == null ? 1n : BigInt(multiplier);
+    if (mult <= 0n) return null;
     const diff = direction === "short" ? entry - exit : exit - entry;
-    return money.divRound(diff * qty, 1000000n);
+    return money.divRound(diff * qty * mult, 1000000n);
   }
 
   function feeInfo(fees) {
@@ -223,12 +225,32 @@
     return grossCents - fee.cents;
   }
 
-  function basisCents(price, quantity) {
+  function assetTypeOf(trade) {
+    const raw = trade && trade.assetType != null ? String(trade.assetType).trim().toLowerCase() : "";
+    if (raw === "call" || raw === "put") return raw;
+    return "equity";
+  }
+
+  function assetLabel(trade) {
+    const type = assetTypeOf(trade);
+    if (type === "call") return "Call";
+    if (type === "put") return "Put";
+    return "Equity";
+  }
+
+  function assetMultiplier(trade) {
+    const type = assetTypeOf(trade);
+    return type === "call" || type === "put" ? 100n : 1n;
+  }
+
+  function basisCents(price, quantity, multiplier) {
     const entry = money.parsePriceTicks(price);
     const qty = money.parseQtyTicks(quantity);
     if (entry == null || qty == null) return null;
     if (entry === 0n || qty === 0n) return null;
-    const basis = money.divRound(entry * qty, 1000000n);
+    const mult = multiplier == null ? 1n : BigInt(multiplier);
+    if (mult <= 0n) return null;
+    const basis = money.divRound(entry * qty * mult, 1000000n);
     if (basis == null || basis === 0n) return null;
     return basis < 0n ? -basis : basis;
   }
@@ -255,19 +277,11 @@
     return (neg ? "-" : "") + body + "%";
   }
 
-  function returnFor(direction, entryPrice, quantity, netCents) {
-    if (direction === "long") {
-      const basis = longCostBasisCents(entryPrice, quantity);
+  function returnFor(direction, entryPrice, quantity, netCents, multiplier) {
+    if (direction === "long" || direction === "short") {
+      const basis = basisCents(entryPrice, quantity, multiplier);
       return {
-        basis: LONG_RETURN_BASIS,
-        basisCents: basis,
-        percent: basis == null ? null : formatPercent(netCents, basis, 2)
-      };
-    }
-    if (direction === "short") {
-      const basis = shortProceedsBasisCents(entryPrice, quantity);
-      return {
-        basis: SHORT_RETURN_BASIS,
+        basis: direction === "short" ? SHORT_RETURN_BASIS : LONG_RETURN_BASIS,
         basisCents: basis,
         percent: basis == null ? null : formatPercent(netCents, basis, 2)
       };
@@ -305,14 +319,14 @@
         dateNote: "",
         lot: true
       };
-      const gross = grossPnlCents(trade.direction, entry, exit && exit.price, exit && exit.quantity);
+      const gross = grossPnlCents(trade.direction, entry, exit && exit.price, exit && exit.quantity, assetMultiplier(trade));
       const fee = feeInfo(exit && exit.fees);
       if (gross == null || fee.error) {
         result.reason = "incomplete";
         return result;
       }
       const net = gross - fee.cents;
-      const ret = returnFor(trade.direction, entry, exit.quantity, net);
+      const ret = returnFor(trade.direction, entry, exit.quantity, net, assetMultiplier(trade));
       result.included = true;
       result.grossCents = gross;
       result.feeCents = fee.cents;
@@ -387,14 +401,14 @@
     }
     const entry = effectiveEntry(trade);
     result.entrySource = entrySource(trade);
-    const gross = grossPnlCents(trade.direction, entry, trade.exitPrice, trade.quantity);
+    const gross = grossPnlCents(trade.direction, entry, trade.exitPrice, trade.quantity, assetMultiplier(trade));
     const fee = feeInfo(trade.fees);
     if (gross == null || fee.error) {
       result.reason = "incomplete";
       return result;
     }
     const net = gross - fee.cents;
-    const ret = returnFor(trade.direction, entry, trade.quantity, net);
+    const ret = returnFor(trade.direction, entry, trade.quantity, net, assetMultiplier(trade));
     result.included = true;
     result.grossCents = gross;
     result.feeCents = fee.cents;
@@ -449,7 +463,7 @@
     else if (!trade || trade.markPrice == null || trade.markPrice === "") unrealizedReason = "no-mark";
     else {
       const qty = money.scaledToNumber(remaining, 4);
-      const gross = grossPnlCents(trade.direction, effectiveEntry(trade), trade.markPrice, qty);
+      const gross = grossPnlCents(trade.direction, effectiveEntry(trade), trade.markPrice, qty, assetMultiplier(trade));
       if (gross == null) unrealizedReason = "incomplete";
       else {
         unrealizedCents = gross;
@@ -486,7 +500,7 @@
         }
         if (trade.direction === "long") {
           const entry = effectiveEntry(trade);
-          const cost = basisCents(entry, books.remainingQty);
+          const cost = basisCents(entry, books.remainingQty, assetMultiplier(trade));
           if (typeof cost === "bigint") longCost = (longCost == null ? 0n : longCost) + cost;
         }
       }
@@ -983,7 +997,7 @@
         skipped += 1;
         return;
       }
-      const risk = money.divRound(diff * qty, 1000000n);
+      const risk = money.divRound(diff * qty * assetMultiplier(trade), 1000000n);
       if (typeof risk !== "bigint") {
         skipped += 1;
         return;
@@ -997,6 +1011,86 @@
       included: included,
       skipped: skipped,
       equityPercent: included && account != null && account > 0n ? formatPercent(cents, account, 2) : null
+    };
+  }
+
+  function moneyBadge(netCents) {
+    if (typeof netCents !== "bigint") return { tone: "flat", label: "CLOSED" };
+    if (netCents > 0n) return { tone: "win", label: "CLOSED - WIN" };
+    if (netCents < 0n) return { tone: "loss", label: "CLOSED - LOSS" };
+    return { tone: "flat", label: "CLOSED - BREAKEVEN" };
+  }
+
+  function statusBadge(trade) {
+    const books = positionAccounting(trade);
+    if (!trade || trade.status === "cancelled") {
+      return { tone: "flat", label: "CANCELLED", note: "Cancelled — not realized" };
+    }
+    if (trade.status === "open") {
+      return {
+        tone: "open",
+        label: books.partial ? "OPEN - PARTIAL" : "OPEN",
+        note: books.partial ? "Open — partially exited" : "Open — not realized"
+      };
+    }
+    const result = tradeResult(trade);
+    const badge = moneyBadge(result.netCents);
+    return { tone: badge.tone, label: badge.label, note: "Closed — recorded exit" };
+  }
+
+  function expectancy(metrics) {
+    if (!metrics || !metrics.tradeCount) {
+      return {
+        ready: false,
+        rr: null,
+        perTradeCents: null,
+        reason: "Not enough closed trades."
+      };
+    }
+    let rr = null;
+    if (metrics.wins > 0 && metrics.losses > 0 && typeof metrics.avgWinCents === "bigint" && typeof metrics.avgLossCents === "bigint") {
+      const win = metrics.avgWinCents < 0n ? -metrics.avgWinCents : metrics.avgWinCents;
+      const loss = metrics.avgLossCents < 0n ? -metrics.avgLossCents : metrics.avgLossCents;
+      if (loss > 0n) rr = formatRatio(win, loss, 2);
+    }
+    return {
+      ready: true,
+      rr: rr,
+      perTradeCents: metrics.avgTradeCents,
+      avgWinCents: metrics.avgWinCents,
+      avgLossCents: metrics.avgLossCents,
+      wins: metrics.wins,
+      losses: metrics.losses,
+      tradeCount: metrics.tradeCount,
+      reason: rr ? "" : "Needs a winning trade and a losing trade to show R:R."
+    };
+  }
+
+  function activeCapitalAtRisk(journal) {
+    const trades = dedupeTrades(journal && journal.trades);
+    let cents = 0n;
+    let included = 0;
+    let skipped = 0;
+    trades.forEach(function (trade) {
+      if (!trade || trade.status !== "open") return;
+      const books = positionAccounting(trade);
+      if (books.remainingQty == null || books.remainingQty <= 0) {
+        skipped += 1;
+        return;
+      }
+      const basis = basisCents(effectiveEntry(trade), books.remainingQty, assetMultiplier(trade));
+      if (typeof basis !== "bigint") {
+        skipped += 1;
+        return;
+      }
+      cents += basis;
+      included += 1;
+    });
+    return {
+      cents: included ? cents : null,
+      included: included,
+      skipped: skipped,
+      empty: included === 0
     };
   }
 
@@ -1022,7 +1116,7 @@
   }
 
   function tradesToCsv(journal) {
-    const header = ["id", "symbol", "name", "direction", "status", "quantity", "entry_price", "average_cost", "exit_price", "entry_date", "exit_date", "fees", "target_price", "hard_stop", "exit_reason", "strategy", "setup", "gross_pnl", "net_pnl", "return_basis", "return_percent", "counted_in_realized", "exclusion_reason", "notes", "remaining_qty", "manual_mark", "unrealized_manual", "unrealized_reason"];
+    const header = ["id", "symbol", "name", "direction", "status", "quantity", "entry_price", "average_cost", "exit_price", "entry_date", "exit_date", "fees", "target_price", "hard_stop", "exit_reason", "strategy", "setup", "gross_pnl", "net_pnl", "return_basis", "return_percent", "counted_in_realized", "exclusion_reason", "notes", "remaining_qty", "manual_mark", "unrealized_manual", "unrealized_reason", "asset_type"];
     const lines = [csvLine(header)];
     dedupeTrades(journal && journal.trades).forEach(function (trade) {
       const books = positionAccounting(trade);
@@ -1060,7 +1154,8 @@
           books.remainingQty == null ? "" : books.remainingQty,
           trade.markPrice == null ? "" : trade.markPrice,
           centsCell(books.unrealizedCents),
-          books.unrealizedReason || ""
+          books.unrealizedReason || "",
+          assetTypeOf(trade)
         ]));
       });
     });
@@ -1121,6 +1216,13 @@
     effectiveEntry: effectiveEntry,
     grossPnlCents: grossPnlCents,
     netPnlCents: netPnlCents,
+    assetTypeOf: assetTypeOf,
+    assetLabel: assetLabel,
+    assetMultiplier: assetMultiplier,
+    expectancy: expectancy,
+    activeCapitalAtRisk: activeCapitalAtRisk,
+    statusBadge: statusBadge,
+    moneyBadge: moneyBadge,
     longCostBasisCents: longCostBasisCents,
     shortProceedsBasisCents: shortProceedsBasisCents,
     tradeResult: tradeResult,

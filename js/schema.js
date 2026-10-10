@@ -26,6 +26,7 @@
   const MAX_IMPORT_CHARS = 2000000;
   const DIRECTIONS = { long: true, short: true };
   const STATUSES = { open: true, closed: true, cancelled: true };
+  const ASSET_TYPES = { equity: true, call: true, put: true };
   const EXIT_REASONS = { "": true, target: true, stop: true, other: true };
   const ORDER_STATUSES = { "": true, waiting: true, filled: true, cancelled: true };
 
@@ -83,6 +84,16 @@
     return String(value || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 12);
   }
 
+  /* Blank and Equity are the read-time default and are omitted so a save does not rewrite older trades. */
+  function optionalAssetType(value) {
+    if (value == null || String(value).trim() === "") return "";
+    const raw = String(value).trim().toLowerCase();
+    if (raw === "equity" || raw === "stock" || raw === "shares" || raw === "share") return "";
+    if (raw === "call" || raw === "put") return raw;
+    if (ASSET_TYPES[raw]) return raw === "equity" ? "" : raw;
+    return null;
+  }
+
   function cleanExit(raw, indexLabel) {
     const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     const where = indexLabel ? indexLabel + ": " : "";
@@ -134,6 +145,8 @@
     if (!validSymbol(symbol)) throw new Error(where + "Enter a ticker like AAPL or BRK.B.");
     if (!DIRECTIONS[src.direction]) throw new Error(where + symbol + " needs a long or short direction.");
     if (!STATUSES[src.status]) throw new Error(where + symbol + " needs an open, closed, or cancelled status.");
+    const assetType = optionalAssetType(src.assetType);
+    if (assetType == null) throw new Error(where + symbol + " type must be Equity, Call, or Put.");
     const exitReason = src.exitReason == null || src.exitReason === "" ? "" : String(src.exitReason);
     if (!EXIT_REASONS[exitReason]) throw new Error(where + symbol + " has an unknown exit reason.");
     const orderStatus = src.orderStatus == null || src.orderStatus === "" ? "" : String(src.orderStatus);
@@ -196,7 +209,7 @@
       }
     }
     const id = typeof src.id === "string" && src.id.trim() ? src.id.trim().slice(0, 80) : uid();
-    return {
+    const trade = {
       id: id,
       symbol: symbol,
       exchange: cleanExchange(src.exchange),
@@ -227,6 +240,8 @@
       markPrice: markPrice,
       markAsOf: markPrice == null ? "" : markAsOf
     };
+    if (assetType) trade.assetType = assetType;
+    return trade;
   }
 
   function cleanBreakdown(raw) {
@@ -370,7 +385,11 @@
     if (!DIRECTIONS[src.direction] || !STATUSES[src.status]) {
       noteBits.push("Recovered with missing direction or status kept as " + direction + " / " + status + " so it is not invented as a realized result.");
     }
-    return {
+    const assetType = optionalAssetType(src.assetType);
+    if (assetType == null) {
+      noteBits.push("Unknown type was kept as Equity. It was not treated as an option.");
+    }
+    const trade = {
       id: typeof src.id === "string" && src.id.trim() ? src.id.trim().slice(0, 80) : uid(),
       symbol: symbol,
       exchange: cleanExchange(src.exchange),
@@ -401,6 +420,8 @@
       markPrice: looseNumber(money.priceNumber, src.markPrice),
       markAsOf: safeDate(src.markAsOf)
     };
+    if (assetType) trade.assetType = assetType;
+    return trade;
   }
 
   function safeDate(value) {

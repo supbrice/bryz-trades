@@ -302,25 +302,38 @@
       return { ok: true };
     },
     calculateRisk: function (input) {
-      const result = ST.positionRisk(input);
-      const box = document.getElementById("riskResult");
-      if (!result.ok) {
-        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(result.error) + "</p>";
+      const sized = ST.calculateRisk({
+        capital: input.accountSize,
+        riskPercent: input.riskPercent,
+        entry: input.entryPrice,
+        stop: input.stopPrice,
+        assetType: input.assetType || "shares"
+      });
+      const box = document.getElementById(input.resultId || "riskResult");
+      if (!sized.ok) {
+        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(sized.error) + "</p>";
+        return;
+      }
+      const directional = input.direction ? ST.positionRisk(input) : null;
+      if (directional && !directional.ok) {
+        box.innerHTML = '<p class="form-error">' + ST.escapeHtml(directional.error) + "</p>";
         return;
       }
       let reward = "";
-      if (result.rewardCents != null) {
-        reward = "<p>Potential reward " + ST.escapeHtml(ST.formatCents(result.rewardCents)) +
-          ". Reward per share " + ST.escapeHtml(ST.formatCents(result.rewardPerShareCents)) +
-          ". Reward to risk " + ST.escapeHtml(result.rewardToRisk || "N/A") + ".</p>";
-      } else if (result.rewardNote) {
-        reward = "<p>" + ST.escapeHtml(result.rewardNote) + "</p>";
+      if (directional && directional.ok && directional.rewardCents != null) {
+        reward = "<p>Potential reward " + ST.escapeHtml(ST.formatCents(directional.rewardCents)) +
+          ". Reward per share " + ST.escapeHtml(ST.formatCents(directional.rewardPerShareCents)) +
+          ". Reward to risk " + ST.escapeHtml(directional.rewardToRisk || "N/A") + ".</p>";
+      } else if (directional && directional.ok && directional.rewardNote) {
+        reward = "<p>" + ST.escapeHtml(directional.rewardNote) + "</p>";
       }
-      box.innerHTML = "<h3>Estimated size</h3><p>Planned risk " + ST.escapeHtml(ST.formatCents(result.plannedRiskCents)) +
-        (result.equityPercent ? " (" + ST.escapeHtml(result.equityPercent) + " of the account size you entered)" : "") +
-        ". Risk per share " + ST.escapeHtml(ST.formatCents(result.perShareRiskCents)) +
-        ". Quantity " + ST.escapeHtml(result.quantityText) + " shares.</p>" + reward +
-        "<p>" + ST.escapeHtml(result.disclaimer) + "</p>";
+      const riskText = ST.formatCents(sized.capitalAtRiskCents, "plain");
+      box.innerHTML = "<h3>Estimated size</h3><p>Max " + ST.escapeHtml(sized.maxUnits) + " " + ST.escapeHtml(sized.unitLabel) +
+        ". Capital at risk " + ST.escapeHtml(riskText) +
+        ". Max account drawdown " + ST.escapeHtml(sized.maxDrawdownPercent || "N/A") + ".</p>" +
+        (sized.note ? "<p>" + ST.escapeHtml(sized.note) + "</p>" : "") +
+        reward +
+        "<p>" + ST.escapeHtml(ST.RISK_DISCLAIMER) + "</p>";
       if (input.remember) {
         const account = ST.moneyNumber(input.accountSize);
         const percent = ST.scaledToNumber(ST.parseScaledDigits(input.riskPercent, 2), 2);

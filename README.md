@@ -56,6 +56,8 @@ For a short trade:
 
 `Gross P/L = (Entry price − Exit price) × Quantity`
 
+Call and Put use the same formulas with a 100-share multiplier. Equity, and any saved trade with no type, does not. The type is optional. A missing type is read as Equity and is not written back onto the stored trade.
+
 `Net realized P/L = Gross P/L − fees`
 
 Entry price is the recorded entry price. If that field is blank and average entry cost is present, average entry cost is used instead, and the trade says so. When both are filled, average cost is kept as a note and is not the P/L price.
@@ -66,7 +68,7 @@ Only closed trades with an entry, an exit price, a share count, and an exit date
 
 ### Return
 
-Long return uses **initial entry cost**: `Quantity × entry price` (the price used for P/L). `Return = Net P/L ÷ that cost`.
+Long return uses **initial entry cost**: `Quantity × entry price` (the price used for P/L). `Return = Net P/L ÷ that cost`. Call and Put include the same 100-share multiplier in the cost, so the percent is still the change in the premium.
 
 Short return uses **short-sale proceeds**: `Quantity × entry price`. `Return = Net P/L ÷ those proceeds`. This is not a margin return. Bryz Trades does not assume a margin rate, because none is recorded. The long-cost label is not reused for shorts.
 

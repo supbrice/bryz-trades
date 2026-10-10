@@ -396,6 +396,7 @@ async function main() {
     await runSymbols(browser, url);
     await runPreserve(browser, url);
     await runPagesBase(browser, url);
+    await runTerminal(browser, url, today);
     await runShots(browser, url, demoJournal(now));
     await runProShots(browser, url, proJournal(now));
     console.log("browser checks passed");
@@ -1000,6 +1001,113 @@ async function runPagesBase(browser, url) {
   }
 }
 
+async function runTerminal(browser, url, today) {
+  const journal = {
+    schemaVersion: 2,
+    settings: { accountSize: 10000, riskPercent: 1 },
+    trades: [
+      { id: "win", symbol: "AAPL", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 110, fees: 0, entryDate: today, exitDate: today },
+      { id: "loss", symbol: "MSFT", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 95, fees: 0, entryDate: today, exitDate: today },
+      { id: "flat", symbol: "AMD", direction: "long", status: "closed", quantity: 4, entryPrice: 50, exitPrice: 50, fees: 0, entryDate: today, exitDate: today },
+      { id: "open", symbol: "NVDA", direction: "long", status: "open", quantity: 5, entryPrice: 150, hardStop: 140, entryDate: today },
+      { id: "call", symbol: "QQQ", assetType: "call", direction: "long", status: "closed", quantity: 1, entryPrice: 2, exitPrice: 3, fees: 0, entryDate: today, exitDate: today }
+    ],
+    days: {}
+  };
+  const sizes = [
+    ["desktop", { width: 1440, height: 900 }],
+    ["phone", { width: 390, height: 844 }]
+  ];
+  for (const size of sizes) {
+    const opened = await openPage(browser, url, size[1], "dark", journal);
+    const page = opened.page;
+    try {
+      await shows(page, "#dashRealized", "+$150.00");
+      await shows(page, "#dashWinRate", "2 / 4");
+      await shows(page, "#dashExpectancy", "2.00 R:R");
+      await shows(page, "#dashExpectancy", "+$37.50");
+      await shows(page, "#dashCapital", "Active Capital at Risk");
+      await shows(page, "#dashCapital", "$750.00");
+      await shows(page, "#dashCapital", "Committed cost basis");
+      await shows(page, "#dashOpen", "1 open");
+      await shows(page, "#dashboardBody", "CLOSED - WIN");
+      await shows(page, "#dashboardBody", "CLOSED - LOSS");
+      await shows(page, "#dashboardBody", "CLOSED - BREAKEVEN");
+      await shows(page, "#dashboardBody", "OPEN");
+      await shows(page, "#dashboardBody", "Call");
+      await shows(page, "#dashboardBody", "Equity");
+      const headers = await page.locator("#dashboardBody .terminal-table th").allTextContents();
+      assert(headers.join(" ").toUpperCase().indexOf("EXIT/TARGET") !== -1, "table headers " + headers.join("|"));
+      assert(headers.join(" ").toUpperCase().indexOf("TYPE") !== -1, "type column " + headers.join("|"));
+      await shows(page, "#dashCapital", "Planned risk");
+      const empty = await page.locator("#dashExpectancy").innerText();
+      assert(!/NaN|Infinity/.test(empty), "expectancy text " + empty);
+      await noOverflow(page, "terminal " + size[0]);
+      if (page.errors.length) throw new Error(page.errors.join("\n"));
+    } finally {
+      await opened.context.close();
+    }
+  }
+  const bare = await openPage(browser, url, { width: 768, height: 1024 }, "dark", { schemaVersion: 2, settings: {}, trades: [], days: {} });
+  try {
+    await shows(bare.page, "#dashExpectancy", "Not enough closed trades");
+    await shows(bare.page, "#dashCapital", "No open positions");
+    await shows(bare.page, "#dashRealized", "N/A");
+    await noOverflow(bare.page, "terminal empty tablet");
+  } finally {
+    await bare.context.close();
+  }
+  const calcPage = await openPage(browser, url, { width: 390, height: 844 }, "dark", journal);
+  const page = calcPage.page;
+  try {
+    await page.getByRole("tab", { name: "Risk" }).click();
+    await page.locator("#riskAccount").fill("10000");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("50");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskAsset").selectOption("options");
+    await page.locator("#riskDirection").selectOption("long");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "0 contracts");
+    await shows(page, "#riskResult", "does not cover 1 contract");
+    assert(!/NaN|Infinity/.test(await page.locator("#riskResult").innerText()), "options size");
+    await page.locator("#riskPercent").fill("10");
+    await page.locator("#riskAsset").selectOption("shares");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "Max 500 shares");
+    await shows(page, "#riskResult", "Max account drawdown");
+    await shows(page, "#riskResult", "gaps, slippage, fees");
+    await page.locator("#riskStop").fill("50");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "same");
+    await page.locator("#riskStop").fill("48");
+    await page.locator("#riskPercent").fill("101");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "above 100");
+    await page.locator("#riskPercent").fill("1");
+    await page.locator("#riskEntry").fill("-1");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "negative");
+    await page.locator("#riskAccount").fill("");
+    await page.locator("#riskCalcBtn").click();
+    await shows(page, "#riskResult", "Enter account capital");
+    await page.getByRole("tab", { name: "Overview" }).click();
+    await page.locator("#sizeCapital").fill("10000");
+    await page.locator("#sizeRisk").fill("1");
+    await page.locator("#sizeEntry").fill("50");
+    await page.locator("#sizeStop").fill("48");
+    await page.locator("#sizeAsset").selectOption("shares");
+    await page.locator("#sizeCalcBtn").click();
+    await shows(page, "#sizeResult", "Max 50 shares");
+    await shows(page, "#sizeResult", "Capital at risk");
+    await noOverflow(page, "terminal calculator phone");
+    if (page.errors.length) throw new Error(page.errors.join("\n"));
+    console.log("terminal checks passed");
+  } finally {
+    await calcPage.context.close();
+  }
+}
+
 async function assertRecentTradesFit(page) {
   const bad = await page.evaluate(function () {
     const card = document.querySelector("#dashboardBody .side-card");
@@ -1011,12 +1119,18 @@ async function assertRecentTradesFit(page) {
       const node = cells[i];
       const rect = node.getBoundingClientRect();
       const label = (node.getAttribute("data-label") || "") + " " + node.textContent.trim();
-      if (rect.right > box.right + 1 || rect.left < box.left - 1) return "outside card " + label;
+      if (rect.width > 0 && rect.right < box.left - 1) return "outside card " + label;
       if (node.scrollWidth > node.clientWidth + 2) return "clipped " + label;
     }
     const text = card.innerText;
+    const source = card.textContent || "";
     if (!/\$\d+\.\d{2}/.test(text)) return "money value is not fully present";
-    if (text.indexOf("Exit") === -1 && text.indexOf("N/A") === -1) return "exit column missing";
+    if (source.indexOf("Exit") === -1 && text.indexOf("N/A") === -1) return "exit column missing";
+    const scroller = card.querySelector(".trade-scroll");
+    if (scroller) {
+      const sbox = scroller.getBoundingClientRect();
+      if (sbox.right > box.right + 2 || sbox.left < box.left - 2) return "table scroll extends outside the card";
+    }
     return "";
   });
   assert(!bad, "recent trades " + bad);

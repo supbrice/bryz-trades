@@ -131,6 +131,34 @@
                 <span class="skeleton"></span>
               </div>
             </div>
+            <form id="sizeForm" class="size-widget chart-card">
+              <div class="card-title"><h3>Position size</h3></div>
+              <p class="hint">Planning math from numbers you type. Shares use the stop distance. Options contracts use that distance times 100. Nothing here is a quote.</p>
+              <div class="size-grid">
+                <label>Account capital ($)
+                  <input id="sizeCapital" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Risk percent
+                  <input id="sizeRisk" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Entry
+                  <input id="sizeEntry" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Stop
+                  <input id="sizeStop" inputmode="decimal" autocomplete="off" />
+                </label>
+                <label>Size as
+                  <select id="sizeAsset">
+                    <option value="shares">Shares</option>
+                    <option value="options">Options contracts</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="primary" id="sizeCalcBtn">Calculate size</button>
+              </div>
+              <div id="sizeResult" class="result-box" role="status"></div>
+            </form>
             <div class="button-row shortcuts">
               <button type="button" id="dashPositions">Open positions</button>
               <button type="button" id="gotoAnalytics">Analytics</button>
@@ -310,6 +338,14 @@
                   <option value="short">Short</option>
                 </select>
               </label>
+              <label>Size as
+                <select id="riskAsset">
+                  <option value="shares">Shares</option>
+                  <option value="options">Options contracts</option>
+                </select>
+              </label>
+            </div>
+            <div class="row-2">
               <label>Planned target ($)
                 <input id="riskTarget" inputmode="decimal" autocomplete="off" placeholder="Optional" />
               </label>
@@ -394,6 +430,13 @@
               <option value="short">Short</option>
             </select>
           </label>
+          <label>Type
+            <select id="fieldAsset">
+              <option value="equity">Equity</option>
+              <option value="call">Call</option>
+              <option value="put">Put</option>
+            </select>
+          </label>
           <label>Status
             <select id="fieldStatus">
               <option value="open">Open</option>
@@ -418,7 +461,7 @@
             <input id="fieldAvg" inputmode="decimal" autocomplete="off" placeholder="Optional" />
           </label>
         </div>
-        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin.</p>
+        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin. Call and Put multiply profit, loss, and cost by 100. Equity does not. Leaving type as Equity does not rewrite a saved trade that has no type.</p>
         <div class="row-2">
           <label>Planned target ($)
             <input id="fieldTarget" inputmode="decimal" autocomplete="off" />
@@ -600,6 +643,7 @@
 
   <noscript><p class="footer-note">Bryz Trades needs JavaScript. It still stays on this device — there is no account.</p></noscript>
   <script src="js/money.js"></script>
+  <script src="js/calculateRisk.js"></script>
   <script src="js/calc.js"></script>
   <script src="js/schema.js"></script>
   <script src="js/storage.js"></script>

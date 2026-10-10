@@ -338,6 +338,46 @@ test("partial exits cannot cover more shares than the position", () => {
   assert.match(built.error, /more shares/);
 });
 
+test("a missing type reads as equity and is not written back", () => {
+  const raw = {
+    id: "kept",
+    symbol: "AAPL",
+    direction: "long",
+    status: "closed",
+    quantity: 1,
+    entryPrice: 10,
+    exitPrice: 12,
+    entryDate: "2026-01-01",
+    exitDate: "2026-01-02",
+    fees: 0
+  };
+  const cleaned = schema.cleanTrade(raw);
+  assert.equal(Object.prototype.hasOwnProperty.call(cleaned, "assetType"), false);
+  assert.equal(calc.assetTypeOf(cleaned), "equity");
+  assert.equal(calc.tradeResult(cleaned).netCents, 200n);
+  const explicit = schema.cleanTrade(Object.assign({}, raw, { assetType: "Equity" }));
+  assert.equal(Object.prototype.hasOwnProperty.call(explicit, "assetType"), false);
+  const call = schema.cleanTrade(Object.assign({}, raw, { id: "c", assetType: "Call", entryPrice: 2, exitPrice: 3 }));
+  assert.equal(call.assetType, "call");
+  assert.equal(calc.tradeResult(call).netCents, 10000n);
+  assert.throws(() => schema.cleanTrade(Object.assign({}, raw, { assetType: "future" })), /Equity, Call, or Put/);
+  const storedRaw = JSON.stringify({ schemaVersion: 3, trades: [raw], days: {}, settings: {} });
+  const store = storage.createMemoryStorage({ [schema.KEYS.journal]: storedRaw });
+  const loaded = storage.loadJournal(store);
+  assert.equal(store.getItem(schema.KEYS.journal), storedRaw);
+  assert.equal(Object.prototype.hasOwnProperty.call(loaded.data.trades[0], "assetType"), false);
+  const written = schema.toStored(loaded.data);
+  assert.equal(Object.prototype.hasOwnProperty.call(written.trades[0], "assetType"), false);
+  const recovered = schema.readStoredJournal(JSON.stringify({
+    schemaVersion: 3,
+    trades: [Object.assign({}, raw, { assetType: "warrant" })],
+    days: {},
+    settings: {}
+  }));
+  assert.match(recovered.journal.trades[0].notes, /kept as Equity/);
+  assert.equal(Object.prototype.hasOwnProperty.call(recovered.journal.trades[0], "assetType"), false);
+});
+
 test("a first visit stores an empty journal", () => {
   const seeded = schema.seedJournal();
   assert.equal(seeded.trades.length, 0);
