@@ -409,7 +409,8 @@ async function runThemeSurfaces(browser, url, today) {
           const gridStyle = getComputedStyle(grid);
           function painted(value) { return value && value !== "none" ? value : ""; }
           const mask = painted(sceneStyle.maskImage) || painted(sceneStyle.webkitMaskImage);
-          const blur = topbar ? (painted(getComputedStyle(topbar).backdropFilter) || painted(getComputedStyle(topbar).webkitBackdropFilter)) : "";
+          const glass = topbar ? getComputedStyle(topbar, "::before") : null;
+          const blur = glass ? (painted(glass.backdropFilter) || painted(glass.webkitBackdropFilter)) : "";
           const stored = localStorage.getItem("ladder-journal-v3") || "";
           let trades = [];
           try { trades = JSON.parse(stored).trades || []; } catch (err) { trades = []; }

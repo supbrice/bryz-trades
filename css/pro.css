@@ -67,9 +67,17 @@ h1, h2, h3, .value, .page-title, .num { font-variant-numeric: tabular-nums; }
   z-index: 4;
   margin: 0 0 12px;
   padding: 8px 0 10px;
+  background: transparent;
+}
+.topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--header-bg);
   -webkit-backdrop-filter: saturate(180%) blur(14px);
   backdrop-filter: saturate(180%) blur(14px);
+  pointer-events: none;
 }
 
 .toolbar {
