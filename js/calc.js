@@ -456,6 +456,8 @@
       events.forEach(function (event) { realizedNet += event.netCents; });
     }
     let unrealizedCents = null;
+    let unrealizedBasisCents = null;
+    let unrealizedPercent = null;
     let unrealizedReason = "no-mark";
     let markAsOf = trade && trade.markAsOf || "";
     if (remaining == null) unrealizedReason = "no-quantity";
@@ -468,6 +470,12 @@
       else {
         unrealizedCents = gross;
         unrealizedReason = "manual-mark";
+        // Percent of the open position's cost: remaining shares x entry (x100 for options). Hidden when the basis is 0.
+        const basis = basisCents(effectiveEntry(trade), qty, assetMultiplier(trade));
+        if (typeof basis === "bigint" && basis > 0n) {
+          unrealizedBasisCents = basis;
+          unrealizedPercent = formatPercent(gross, basis, 2);
+        }
       }
     }
     return {
@@ -476,6 +484,8 @@
       exitedQty: bad ? null : money.scaledToNumber(exited, 4),
       realizedNetCents: realizedNet,
       unrealizedCents: unrealizedCents,
+      unrealizedBasisCents: unrealizedBasisCents,
+      unrealizedPercent: unrealizedPercent,
       unrealizedReason: unrealizedReason,
       markAsOf: markAsOf,
       partial: !!(remaining != null && remaining > 0n && exited > 0n)
@@ -485,6 +495,8 @@
   function portfolioSnapshot(journal) {
     const trades = dedupeTrades(journal && journal.trades);
     let unrealized = null;
+    let unrealizedBasis = 0n;
+    let basisComplete = true;
     let marked = 0;
     let openUnmarked = 0;
     let longCost = null;
@@ -495,6 +507,8 @@
         if (books.unrealizedReason === "manual-mark" && typeof books.unrealizedCents === "bigint") {
           marked += 1;
           unrealized = (unrealized == null ? 0n : unrealized) + books.unrealizedCents;
+          if (typeof books.unrealizedBasisCents === "bigint") unrealizedBasis += books.unrealizedBasisCents;
+          else basisComplete = false;
         } else if (trade.status === "open" || books.partial) {
           openUnmarked += 1;
         }
@@ -509,6 +523,8 @@
       portfolioValueCents: null,
       cashCents: null,
       unrealizedCents: unrealized,
+      unrealizedBasisCents: unrealized != null && basisComplete && unrealizedBasis > 0n ? unrealizedBasis : null,
+      unrealizedPercent: unrealized != null && basisComplete && unrealizedBasis > 0n ? formatPercent(unrealized, unrealizedBasis, 2) : null,
       markedPositions: marked,
       openUnmarked: openUnmarked,
       recordedLongCostCents: longCost

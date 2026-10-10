@@ -551,3 +551,47 @@ test("expectancy uses closed trades and stays empty without enough of them", () 
   assert.equal(stats.perTradeCents, 2500n);
   assert.equal(stats.tradeCount, 2);
 });
+
+test("unrealized percent: SOFI 70 @ 18 with manual marks", () => {
+  const base = { id: "sofi", symbol: "SOFI", direction: "long", status: "open", quantity: 70, entryPrice: 18, exits: [] };
+  let b = calc.positionAccounting(Object.assign({}, base, { markPrice: "15.61" }));
+  assert.equal(b.unrealizedCents, -16730n);
+  assert.equal(b.unrealizedBasisCents, 126000n);
+  assert.equal(b.unrealizedPercent, "-13.28%");
+  b = calc.positionAccounting(Object.assign({}, base, { markPrice: "15.74" }));
+  assert.equal(b.unrealizedCents, -15820n);
+  assert.equal(b.unrealizedPercent, "-12.56%");
+  const snap = calc.portfolioSnapshot({ trades: [Object.assign({}, base, { markPrice: "15.74" })] });
+  assert.equal(snap.unrealizedCents, -15820n);
+  assert.equal(snap.unrealizedPercent, "-12.56%");
+});
+
+test("unrealized percent: short and option cases", () => {
+  // Short 50 @ 40, mark 36: +$200 on $2,000 of proceeds = +10.00%
+  const sh = calc.positionAccounting({ id: "s", symbol: "XYZ", direction: "short", status: "open", quantity: 50, entryPrice: 40, markPrice: "36", exits: [] });
+  assert.equal(sh.unrealizedCents, 20000n);
+  assert.equal(sh.unrealizedPercent, "10.00%");
+  // Call: 2 contracts @ 1.50 (x100 = $300 basis), mark 2.10: +$120 = +40.00%
+  const call = calc.positionAccounting({ id: "c", symbol: "SOFI", direction: "long", assetType: "call", status: "open", quantity: 2, entryPrice: 1.5, markPrice: "2.10", exits: [] });
+  assert.equal(call.unrealizedCents, 12000n);
+  assert.equal(call.unrealizedBasisCents, 30000n);
+  assert.equal(call.unrealizedPercent, "40.00%");
+  // Partial exit: percent uses only the shares still open
+  const part = calc.positionAccounting({ id: "p", symbol: "ABC", direction: "long", status: "open", quantity: 10, entryPrice: 20, markPrice: "18", exits: [{ quantity: 4, price: 22, date: "2026-10-01", fees: null }] });
+  assert.equal(part.unrealizedCents, -1200n);
+  assert.equal(part.unrealizedPercent, "-10.00%");
+});
+
+test("unrealized percent hidden with no mark or a zero basis", () => {
+  const noMark = calc.positionAccounting({ id: "n", symbol: "A", direction: "long", status: "open", quantity: 10, entryPrice: 5, exits: [] });
+  assert.equal(noMark.unrealizedPercent, null);
+  const zero = calc.positionAccounting({ id: "z", symbol: "B", direction: "long", status: "open", quantity: 10, entryPrice: 0, markPrice: "1", exits: [] });
+  assert.equal(zero.unrealizedPercent, null);
+  assert.equal(calc.portfolioSnapshot({ trades: [] }).unrealizedPercent, null);
+  // Snapshot percent across two marked positions = total unrealized / total open basis
+  const two = calc.portfolioSnapshot({ trades: [
+    { id: "1", symbol: "A", direction: "long", status: "open", quantity: 10, entryPrice: 10, markPrice: "11", exits: [] },
+    { id: "2", symbol: "B", direction: "long", status: "open", quantity: 10, entryPrice: 30, markPrice: "27", exits: [] }] });
+  assert.equal(two.unrealizedCents, -2000n);
+  assert.equal(two.unrealizedPercent, "-5.00%");
+});

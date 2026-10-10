@@ -38,6 +38,11 @@
   function fmtLong(iso) { var p = iso.split('-'); return SHORT_M[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0]; }
   function signClass(c) { return typeof c !== 'bigint' ? '' : c > 0n ? 'pos' : c < 0n ? 'neg' : ''; }
   function money(c) { return typeof c === 'bigint' ? ST.formatCents(c).replace(/^-/, '\u2212') : '—'; }
+  // "-13.28%" -> " (−13.28%)", "13.28%" -> " (+13.28%)"; empty when there is no percent.
+  function pctNote(p) {
+    if (typeof p !== 'string' || !p) return '';
+    return ' (' + (p.charAt(0) === '-' ? '\u2212' + p.slice(1) : (/^0(\.0+)?%$/.test(p) ? p : '+' + p)) + ')';
+  }
   function plain(c) { return typeof c === 'bigint' ? ST.formatCents(c, 'plain').replace(/^-/, '\u2212') : '—'; }
   function price(v) {
     if (v == null || v === '') return '—';
@@ -99,7 +104,7 @@
     }
     box.appendChild(kpiCard(svgIcon([['path', { d: 'M5 12h14M12 5l7 7-7 7' }]]), 'Expectancy', eVal, eCls, eSub));
     var capSub = cap.included ? 'Open cost basis · ' + cap.included + ' open position' + (cap.included === 1 ? '' : 's') : 'No open positions';
-    if (typeof snap.unrealizedCents === 'bigint') capSub += ' · unrealized ' + money(snap.unrealizedCents) + ' from your marks';
+    if (typeof snap.unrealizedCents === 'bigint') capSub += ' · unrealized ' + money(snap.unrealizedCents) + pctNote(snap.unrealizedPercent) + ' from your marks';
     box.appendChild(kpiCard(svgIcon([['path', { d: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z' }]]), 'Capital at risk',
       cap.included ? plain(cap.cents) : '$0.00', cap.included ? '' : 'empty-v', capSub + '.'));
     var notes = [];
@@ -151,7 +156,7 @@
         if (res.reason === 'partial') pnlTitle = 'Realized on exited shares so far';
         if (res.reason === 'undated') pnlTitle = 'No exit date, so not in the totals';
       } else if (typeof books.unrealizedCents === 'bigint') {
-        pnlText = money(books.unrealizedCents); pnlCls = 'dim mark'; pnlTitle = 'Unrealized from the mark you typed' + (books.markAsOf ? ' on ' + fmtDate(books.markAsOf) : '');
+        pnlText = money(books.unrealizedCents) + pctNote(books.unrealizedPercent); pnlCls = 'dim mark'; pnlTitle = 'Unrealized from the mark you typed' + (books.markAsOf ? ' on ' + fmtDate(books.markAsOf) : '');
       }
       var exits = Array.isArray(t.exits) ? t.exits : [];
       var exitText = exits.length ? exits.length + ' exit' + (exits.length === 1 ? '' : 's') : price(t.exitPrice);

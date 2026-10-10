@@ -77,7 +77,7 @@ function expectedFor(initial) {
   let pnlOk = true;
   for (const t of v3exp.journal.trades) {
     const res = calc.tradeResult(t), books = calc.positionAccounting(t);
-    const want = typeof res.netCents === "bigint" ? fmt(res.netCents) : typeof books.unrealizedCents === "bigint" ? fmt(books.unrealizedCents) : "—";
+    const want = typeof res.netCents === "bigint" ? fmt(res.netCents) : typeof books.unrealizedCents === "bigint" ? fmt(books.unrealizedCents) + (books.unrealizedPercent ? " (" + (books.unrealizedPercent[0] === "-" ? "\u2212" + books.unrealizedPercent.slice(1) : "+" + books.unrealizedPercent) + ")" : "") : "—";
     const c = cells.find((x) => x.sym === t.symbol);
     if (!c || c.pnl !== want) { pnlOk = false; console.log("   mismatch", t.symbol, c && c.pnl, want); }
   }

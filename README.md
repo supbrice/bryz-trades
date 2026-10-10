@@ -97,7 +97,7 @@ Realized totals include each dated lot on that lot’s exit date. The position s
 
 ### Unrealized results
 
-Unrealized profit and loss is shown only when you type a **manual mark**. It is `(mark − entry) × remaining shares` for a long, and `(entry − mark) × remaining shares` for a short. No fee is subtracted, because the shares have not been exited. The line is labeled as a manual mark and shows the as-of date when you entered one. With no mark, the value is **N/A**. The chart is not a mark.
+Unrealized profit and loss is shown only when you type a **manual mark**. It is `(mark − entry) × remaining shares` for a long, and `(entry − mark) × remaining shares` for a short. No fee is subtracted, because the shares have not been exited. Next to the amount, the percent is unrealized ÷ (remaining shares × entry, ×100 for options), for example −$167.30 (−13.28%) for 70 shares bought at $18.00 and marked at $15.61. The dashboard line uses total unrealized ÷ total open cost of the marked positions. The percent is hidden when there is no mark or the cost is zero. The line is labeled as a manual mark and shows the as-of date when you entered one. With no mark, the value is **N/A**. The chart is not a mark.
 
 ### Portfolio value
 
