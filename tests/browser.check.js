@@ -374,6 +374,102 @@ async function noOverflow(page, label) {
   assert(info.scroll <= info.client + 1, label + " overflows " + info.scroll + " > " + info.client);
 }
 
+async function runThemeSurfaces(browser, url, today) {
+  const journal = {
+    schemaVersion: 2,
+    settings: { accountSize: 10000, riskPercent: 1 },
+    trades: [
+      { id: "win", symbol: "AAPL", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 110, fees: 0, entryDate: today, exitDate: today },
+      { id: "loss", symbol: "MSFT", direction: "long", status: "closed", quantity: 10, entryPrice: 100, exitPrice: 95, fees: 0, entryDate: today, exitDate: today },
+      { id: "flat", symbol: "AMD", direction: "long", status: "closed", quantity: 4, entryPrice: 50, exitPrice: 50, fees: 0, entryDate: today, exitDate: today },
+      { id: "open", symbol: "NVDA", direction: "long", status: "open", quantity: 5, entryPrice: 150, hardStop: 140, entryDate: today },
+      { id: "call", symbol: "QQQ", assetType: "call", direction: "long", status: "closed", quantity: 1, entryPrice: 2, exitPrice: 3, fees: 0, entryDate: today, exitDate: today }
+    ],
+    days: {}
+  };
+  const sizes = [
+    ["phone", { width: 390, height: 844 }],
+    ["tablet", { width: 768, height: 1024 }],
+    ["desktop", { width: 1440, height: 900 }]
+  ];
+  let realized = "";
+  for (const theme of ["dark", "light"]) {
+    for (const size of sizes) {
+      const opened = await openPage(browser, url, size[1], theme, journal);
+      const page = opened.page;
+      try {
+        await page.evaluate(function () { return document.fonts.ready; });
+        const info = await page.evaluate(function () {
+          const scene = document.querySelector(".scene");
+          const grid = document.querySelector(".scene-grid");
+          const chart = document.querySelector(".scene-chart");
+          const card = document.querySelector(".primary-metrics > .stat");
+          const topbar = document.querySelector(".topbar");
+          const sceneStyle = getComputedStyle(scene);
+          const gridStyle = getComputedStyle(grid);
+          function painted(value) { return value && value !== "none" ? value : ""; }
+          const mask = painted(sceneStyle.maskImage) || painted(sceneStyle.webkitMaskImage);
+          const blur = topbar ? (painted(getComputedStyle(topbar).backdropFilter) || painted(getComputedStyle(topbar).webkitBackdropFilter)) : "";
+          const stored = localStorage.getItem("ladder-journal-v3") || "";
+          let trades = [];
+          try { trades = JSON.parse(stored).trades || []; } catch (err) { trades = []; }
+          return {
+            theme: document.documentElement.getAttribute("data-theme"),
+            themeKey: localStorage.getItem("stock-tracker-theme"),
+            bg: getComputedStyle(document.body).backgroundColor,
+            font: getComputedStyle(document.body).fontFamily,
+            poppins: document.fonts.check("400 16px Poppins"),
+            scenePos: sceneStyle.position,
+            sceneAnim: sceneStyle.animationName,
+            gridSize: gridStyle.backgroundSize,
+            gridImage: gridStyle.backgroundImage,
+            mask: mask,
+            lines: chart.querySelectorAll("polyline").length,
+            bars: chart.querySelectorAll("rect").length,
+            motif: getComputedStyle(scene).color,
+            radius: card ? getComputedStyle(card).borderRadius : "",
+            blur: blur,
+            ids: trades.map(function (trade) { return trade.id; }).join(","),
+            outside: document.querySelectorAll("script[src^='http'], link[href^='http']").length
+          };
+        });
+        assert(info.theme === theme, size[0] + " " + theme + " theme " + info.theme);
+        assert(info.themeKey === theme, "theme storage key changed");
+        assert(info.poppins, size[0] + " " + theme + " Poppins did not load");
+        assert(info.font.indexOf("Poppins") !== -1, "font stack " + info.font);
+        assert(info.scenePos === "fixed", "chart scene is not fixed");
+        assert(info.sceneAnim === "none", "chart scene is animated");
+        assert(info.gridSize.split(",").every(function (part) { return part.trim() === "48px 48px"; }), "grid size " + info.gridSize);
+        assert(info.gridImage.indexOf("linear-gradient") !== -1, "grid is not a line gradient");
+        const gridColor = theme === "dark" ? "rgba(90, 240, 138, 0.06)" : "rgba(31, 122, 54, 0.07)";
+        assert(info.gridImage.indexOf(gridColor) !== -1, theme + " grid color " + info.gridImage);
+        assert(/ellipse|radial-gradient/i.test(info.mask), "grid mask missing");
+        assert(info.lines >= 3, "trend lines missing");
+        assert(info.bars >= 2, "bar clusters missing");
+        assert(info.radius === "22px", "card radius " + info.radius);
+        assert(/blur\(14px\)/.test(info.blur), "header blur " + info.blur);
+        assert(info.ids === "win,loss,flat,open,call", "saved trades changed " + info.ids);
+        assert(info.outside === 0, "external stylesheet or script");
+        const expectedBg = theme === "dark" ? "rgb(22, 54, 60)" : "rgb(255, 255, 255)";
+        assert(info.bg === expectedBg, theme + " background " + info.bg);
+        const figure = await page.locator("#dashRealized").innerText();
+        assert(figure.includes("+$150.00"), theme + " " + size[0] + " realized " + figure);
+        if (!realized) realized = figure;
+        assert(figure === realized, "realized P&L changed across themes");
+        await noOverflow(page, "theme " + theme + " " + size[0]);
+        await page.screenshot({
+          path: path.join(shotDir, "theme_" + theme + "_" + size[0] + ".png"),
+          fullPage: size[1].width >= 900
+        });
+        if (page.errors.length) throw new Error(page.errors.join("\n"));
+      } finally {
+        await opened.context.close();
+      }
+    }
+  }
+  console.log("theme surfaces passed");
+}
+
 async function main() {
   fs.mkdirSync(shotDir, { recursive: true });
   fs.mkdirSync(fullShotDir, { recursive: true });
@@ -397,6 +493,7 @@ async function main() {
     await runPreserve(browser, url);
     await runPagesBase(browser, url);
     await runTerminal(browser, url, today);
+    await runThemeSurfaces(browser, url, today);
     await runShots(browser, url, demoJournal(now));
     await runProShots(browser, url, proJournal(now));
     console.log("browser checks passed");

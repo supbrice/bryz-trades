@@ -7,7 +7,7 @@
     const next = theme === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", next === "light" ? "#F3F6F3" : "#090B0A");
+    if (meta) meta.setAttribute("content", next === "light" ? "#ffffff" : "#16363c");
     const btn = document.getElementById("themeToggle");
     if (btn) {
       const dark = next === "dark";

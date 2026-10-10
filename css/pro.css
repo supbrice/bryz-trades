@@ -1,34 +1,34 @@
 @font-face {
-  font-family: Inter;
+  font-family: Poppins;
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("../assets/fonts/inter-latin-400-normal.woff2") format("woff2");
+  src: url("../assets/fonts/poppins-latin-400-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: Inter;
+  font-family: Poppins;
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("../assets/fonts/inter-latin-500-normal.woff2") format("woff2");
+  src: url("../assets/fonts/poppins-latin-500-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: Inter;
+  font-family: Poppins;
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("../assets/fonts/inter-latin-600-normal.woff2") format("woff2");
+  src: url("../assets/fonts/poppins-latin-600-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: Inter;
+  font-family: Poppins;
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("../assets/fonts/inter-latin-700-normal.woff2") format("woff2");
+  src: url("../assets/fonts/poppins-latin-700-normal.woff2") format("woff2");
 }
 
 body {
-  font-family: Inter, -apple-system, sans-serif;
+  font-family: Poppins, -apple-system, sans-serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.011em;
 }
@@ -67,7 +67,9 @@ h1, h2, h3, .value, .page-title, .num { font-variant-numeric: tabular-nums; }
   z-index: 4;
   margin: 0 0 12px;
   padding: 8px 0 10px;
-  background: var(--bg);
+  background: var(--header-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
 }
 
 .toolbar {
@@ -120,7 +122,7 @@ h1, h2, h3, .value, .page-title, .num { font-variant-numeric: tabular-nums; }
 .curve .zero { stroke: rgba(245, 247, 245, 0.55); stroke-width: 1; }
 html[data-theme="light"] .curve .zero { stroke: rgba(18, 22, 20, 0.4); }
 .curve .series { stroke-width: 2.25px; }
-.curve .axis, .bars .axis { font-family: Inter, system-ui, sans-serif; }
+.curve .axis, .bars .axis { font-family: ui-monospace, Consolas, monospace; }
 
 .viz-grid {
   display: grid;
@@ -185,7 +187,7 @@ html[data-theme="light"] .curve .zero { stroke: rgba(18, 22, 20, 0.4); }
   display: inline-flex;
   margin: 0 6px 0 0;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--secondary);
   font-size: 0.78rem;
   letter-spacing: 0.03em;
@@ -203,22 +205,22 @@ html[data-theme="light"] .curve .zero { stroke: rgba(18, 22, 20, 0.4); }
 .row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .row-actions button { min-height: 36px; padding: 0.15rem 0.45rem; font-size: 0.75rem; }
 
-.day.heat-1.gain { background: #16352A; }
-.day.heat-2.gain { background: #1C4A36; }
-.day.heat-3.gain { background: #226044; }
-.day.heat-4.gain { background: #287850; }
-.day.heat-1.loss { background: #351C1E; }
-.day.heat-2.loss { background: #4A2226; }
-.day.heat-3.loss { background: #5C282C; }
-.day.heat-4.loss { background: #6E3034; }
-html[data-theme="light"] .day.heat-1.gain { background: #E7F6EC; }
-html[data-theme="light"] .day.heat-2.gain { background: #CDEBD8; }
-html[data-theme="light"] .day.heat-3.gain { background: #A9DCC0; }
-html[data-theme="light"] .day.heat-4.gain { background: #7FCCA4; }
-html[data-theme="light"] .day.heat-1.loss { background: #FBEAEA; }
-html[data-theme="light"] .day.heat-2.loss { background: #F6D0D2; }
-html[data-theme="light"] .day.heat-3.loss { background: #EFB4B8; }
-html[data-theme="light"] .day.heat-4.loss { background: #E59298; }
+.day.heat-1.gain { background: color-mix(in srgb, var(--ok) 10%, var(--card)); }
+.day.heat-2.gain { background: color-mix(in srgb, var(--ok) 14%, var(--card)); }
+.day.heat-3.gain { background: color-mix(in srgb, var(--ok) 18%, var(--card)); }
+.day.heat-4.gain { background: color-mix(in srgb, var(--ok) 20%, var(--card)); }
+.day.heat-1.loss { background: color-mix(in srgb, var(--danger) 4%, var(--card)); }
+.day.heat-2.loss { background: color-mix(in srgb, var(--danger) 6%, var(--card)); }
+.day.heat-3.loss { background: color-mix(in srgb, var(--danger) 8%, var(--card)); }
+.day.heat-4.loss { background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
+html[data-theme="light"] .day.heat-1.gain { background: color-mix(in srgb, var(--ok) 8%, white); }
+html[data-theme="light"] .day.heat-2.gain { background: color-mix(in srgb, var(--ok) 12%, white); }
+html[data-theme="light"] .day.heat-3.gain { background: color-mix(in srgb, var(--ok) 14%, white); }
+html[data-theme="light"] .day.heat-4.gain { background: color-mix(in srgb, var(--ok) 16%, white); }
+html[data-theme="light"] .day.heat-1.loss { background: color-mix(in srgb, var(--danger) 4%, white); }
+html[data-theme="light"] .day.heat-2.loss { background: color-mix(in srgb, var(--danger) 6%, white); }
+html[data-theme="light"] .day.heat-3.loss { background: color-mix(in srgb, var(--danger) 7%, white); }
+html[data-theme="light"] .day.heat-4.loss { background: color-mix(in srgb, var(--danger) 8%, white); }
 
 .empty-hero {
   display: grid;
@@ -334,9 +336,9 @@ button, .stat, .chart-card, .side-card, .panel { transition: border-color 160ms 
     min-height: 100vh;
     height: auto;
     border-right: 1px solid var(--line);
-    background: #090d16;
+    background: var(--bg);
   }
-  html[data-theme="light"] .sidebar { background: #fff; }
+  html[data-theme="light"] .sidebar { background: var(--bg); }
   .tab-shell {
     position: sticky;
     top: 0;
@@ -395,15 +397,12 @@ button, .stat, .chart-card, .side-card, .panel { transition: border-color 160ms 
 }
 
 
-:root { --line: #1f2937; }
-html[data-theme="light"] { --line: #d1d5db; }
-
 body { font-size: 14px; line-height: 1.45; }
 
 h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
 h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
 
-button { border-radius: 6px; font-weight: 500; }
+button { border-radius: 999px; font-weight: 500; }
 button.primary { font-weight: 600; }
 
 .view > .panel {
@@ -422,7 +421,7 @@ button.primary { font-weight: 600; }
 .stat, .chart-card, .side-card, .stat-card, .metric, .result-box, .size-widget {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 .stat { padding: 14px 14px 12px; }
@@ -502,54 +501,54 @@ button.primary { font-weight: 600; }
 .row-actions button {
   min-height: 28px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: 999px;
   background: transparent;
 }
 
 .calendar { gap: 4px; width: 100%; }
 .day {
   min-height: 84px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: #161C18;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
 }
 html[data-theme="light"] .day {
-  background: #fff;
-  border-color: rgba(18, 22, 20, 0.08);
+  background: var(--card);
+  border-color: var(--line);
 }
-.day.heat-1.gain { background: #143028; }
-.day.heat-2.gain { background: #1A4334; }
-.day.heat-3.gain { background: #215740; }
-.day.heat-4.gain { background: #28704E; }
-.day.heat-1.loss { background: #3A1C1E; }
-.day.heat-2.loss { background: #542428; }
-.day.heat-3.loss { background: #6A2C30; }
-.day.heat-4.loss { background: #7A3438; }
+.day.heat-1.gain { background: color-mix(in srgb, var(--ok) 10%, var(--card)); }
+.day.heat-2.gain { background: color-mix(in srgb, var(--ok) 14%, var(--card)); }
+.day.heat-3.gain { background: color-mix(in srgb, var(--ok) 18%, var(--card)); }
+.day.heat-4.gain { background: color-mix(in srgb, var(--ok) 20%, var(--card)); }
+.day.heat-1.loss { background: color-mix(in srgb, var(--danger) 4%, var(--card)); }
+.day.heat-2.loss { background: color-mix(in srgb, var(--danger) 6%, var(--card)); }
+.day.heat-3.loss { background: color-mix(in srgb, var(--danger) 8%, var(--card)); }
+.day.heat-4.loss { background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
 .dow { font-size: 11px; font-weight: 500; letter-spacing: 0.04em; }
 .calendar-hint { margin: 8px 0 0; }
 
-.sidebar { background: #090d16; }
-html[data-theme="light"] .sidebar { background: #fff; }
+.sidebar { background: var(--bg); }
+html[data-theme="light"] .sidebar { background: var(--bg); }
 
 @media (min-width: 700px) {
   .tabs button {
     min-height: 32px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 999px;
     background: transparent;
     color: var(--muted);
     font-size: 13px;
     font-weight: 500;
   }
   .tabs button.active {
-    background: rgba(59, 130, 246, 0.16);
+    background: var(--tab-active-bg);
     color: var(--accent);
     border-color: transparent;
   }
-  .tabs button:hover { background: #1f2937; color: var(--text); }
-  html[data-theme="light"] .tabs button:hover { background: rgba(18, 22, 20, 0.04); }
-  html[data-theme="light"] .tabs button.active { background: rgba(37, 99, 235, 0.12); }
-  #topLogTrade { min-height: 32px; padding: 0 12px; border-radius: 6px; }
+  .tabs button:hover { background: var(--hover-wash); color: var(--text); }
+  html[data-theme="light"] .tabs button:hover { background: var(--hover-wash); }
+  html[data-theme="light"] .tabs button.active { background: var(--tab-active-bg); }
+  #topLogTrade { min-height: 32px; padding: 0 12px; border-radius: 999px; }
   .top-range { display: flex; align-items: center; gap: 8px; }
   .top-range label {
     display: flex;
@@ -667,13 +666,13 @@ html[data-theme="light"] .sidebar { background: #fff; }
 .skeleton {
   display: block;
   height: 72px;
-  border-radius: 12px;
-  background: #161C18;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+  border: 1px solid var(--line);
 }
 html[data-theme="light"] .skeleton {
-  background: #E4EBE6;
-  border-color: rgba(18, 22, 20, 0.08);
+  background: var(--panel);
+  border-color: var(--line);
 }
 
 @media (min-width: 700px) {
