@@ -547,4 +547,25 @@
   resetForm(); renderAll(); renderSize(); syncThemeBtn();
   if (blocked) { banner(loaded.warning || 'Saving is paused so nothing is overwritten.', true); $('saveState').textContent = 'Not saved'; }
   else if (loaded.warning) banner(loaded.warning, false);
+
+  /* ---------- One-tap import link (#import=...) : always merge, never replace ---------- */
+  function clearImportHash() {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
+  }
+  function handleImportLink() {
+    if (!ST.hasImportHash(location.hash)) return;
+    if (blocked) { toast('Saving is paused, so the import link was not used. Nothing was changed.', true); return; }
+    var r = ST.planImportLink(journal, location.hash, ST.planImport);
+    if (!r.ok) { toast(r.error, true); clearImportHash(); return; }
+    if (!r.newCount) { toast('Those trades are already in your journal. Nothing was added.'); clearImportHash(); return; }
+    if (!window.confirm(r.message)) return; // Cancel: change nothing
+    try {
+      journal = ST.commitImport(localStorage, journal, r.plan, { mode: 'merge', overwriteIds: false, importSimilar: false, days: 'keep' });
+    } catch (err) { toast(err.message || 'Import failed. Nothing was changed.', true); return; }
+    clearImportHash();
+    resetForm(); renderAll();
+    toast('Added ' + r.newCount + ' trade' + (r.newCount === 1 ? '' : 's') + ' from the link. A safety copy was kept in this browser.');
+  }
+  window.addEventListener('hashchange', handleImportLink);
+  setTimeout(handleImportLink, 0);
 })();

@@ -149,3 +149,7 @@ npm i --no-save playwright-core && node tests/browser.check.js
 ```
 
 Not financial advice. Does not place trades.
+
+## One-tap import link
+
+Opening `https://supbrice.github.io/bryz-trades/#import=<data>` (where `<data>` is a backup file's JSON, base64url-encoded) asks "Add N trades from this link? Your existing trades are kept." On yes it merges exactly like Import → Merge: a safety copy is saved first, trades whose id is already in the journal are skipped, and nothing is replaced. Then the link is cleared from the address bar. Cancel changes nothing. A damaged or invalid link shows an error and changes nothing. The data only lives in the link, never in this repo. Tests: `node --test tests/*.test.js` and `node tests/importlink.check.js`.
