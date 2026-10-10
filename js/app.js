@@ -578,4 +578,20 @@
   }
   window.addEventListener('hashchange', handleImportLink);
   setTimeout(handleImportLink, 0);
+
+  /* ---------- Pages (hash routes) ---------- */
+  var router = PageRouter.start({
+    nav: $('pagenav'), siteTitle: 'Bryz Trades',
+    routes: [
+      { id: 'overview', label: 'Overview', sections: ['hero', 'stats'] },
+      { id: 'trades', label: 'Trades', sections: ['log', 'trades'] },
+      { id: 'calendar', label: 'Calendar', sections: ['calendar'] },
+      { id: 'risk', label: 'Risk calculator', sections: ['size'] },
+      { id: 'backup', label: 'Backup', sections: ['backup'] }
+    ],
+    // old in-page links (#log, #backup ...) open their page
+    aliases: { top: 'overview', hero: 'overview', stats: 'overview', overview: 'overview', log: 'trades', trades: 'trades', calendar: 'calendar', size: 'risk', risk: 'risk', backup: 'backup' },
+    isSpecial: function (h) { return ST.hasImportHash(h); }
+  });
+  window.BryzRouter = router;
 })();

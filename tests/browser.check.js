@@ -37,11 +37,14 @@ function expectedFor(initial) {
     await page.evaluate((init) => { localStorage.clear(); Object.keys(init).forEach((k) => localStorage.setItem(k, init[k])); }, initial);
     await page.reload();
   }
+  // Pages: each section lives on its own hash route now
+  const route = async (r) => { await page.evaluate((r) => { location.hash = "#/" + r; }, r); await page.waitForTimeout(80); };
   const kpis = () => page.$$eval("#kpis .v", (n) => n.map((x) => x.textContent));
   const rows = () => page.$$eval("#tradeRows tr", (n) => n.length);
 
   // 0) first visit: empty state, no fake numbers
   await loadWith({});
+  await route("trades");
   ok((await rows()) === 0 && !(await page.isHidden("#tradesEmpty")), "first visit: empty table + empty state");
   const k0 = await kpis();
   ok(k0[0] === "—" && k0[1] === "—" && k0[3] === "$0.00", "first visit: no fake numbers (" + k0.join(" | ") + ")");
@@ -83,6 +86,7 @@ function expectedFor(initial) {
   }
   ok(pnlOk, "every trade's P&L cell equals main's tradeResult / manual-mark unrealized");
   // edit NVDA partial (notes only) -> exits, stop, strategy etc kept
+  await route("trades");
   const idx = await page.$$eval("#tradeRows tr", (n) => n.findIndex((r) => r.children[1].textContent === "NVDA"));
   await page.click(`#tradeRows tr:nth-child(${idx + 1}) .ib.edit`);
   ok(await page.isDisabled("#f-exit"), "partial-exit trade: exit field locked");
@@ -137,6 +141,7 @@ function expectedFor(initial) {
 
   // 3) Day dialog keeps breakdown/adjustment
   await page.evaluate(() => { document.querySelector('[data-key]'); });
+  await route("calendar");
   await page.click("#calPrev"); // Sep 2026 (today is Oct)
   await page.click('[data-key="2026-09-05"]');
   await page.fill("#d-note", "Good day edited");
@@ -149,6 +154,7 @@ function expectedFor(initial) {
   ok(calTxt.startsWith(fmt(sep.tradeCents)), "Sept calendar total = main monthSummary (" + calTxt + ")");
 
   // 4) Export -> re-import (merge + replace), plus importing an old-format export file
+  await route("backup");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#exportBtn")]);
   const exp = path.join(OUT, "trades-export.json"); await dl.saveAs(exp);
   const exported = JSON.parse(fs.readFileSync(exp, "utf8"));
@@ -174,6 +180,7 @@ function expectedFor(initial) {
   ok(await page.isVisible("#banner"), "corrupt journal: banner shown");
   let st = await dump();
   ok(st["ladder-journal-v3-corrupt"] === "{broken", "corrupt copy kept (same as main)");
+  await route("trades");
   await page.fill("#f-symbol", "AAA"); await page.fill("#f-qty", "1"); await page.fill("#f-entry", "1"); await page.click("#submitBtn");
   st = await dump();
   ok(st["ladder-journal-v3"] === "{broken", "no write while paused");

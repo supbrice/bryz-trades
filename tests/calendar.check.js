@@ -27,7 +27,7 @@ const BIGLOSS = t("c-big", "DDD", "2026-10-08", 20, 10);
     await p.goto(BASE);
     const seeded = journal(trades);
     await p.evaluate((v) => { localStorage.clear(); localStorage.setItem("ladder-journal-v3", v); }, seeded);
-    await p.reload(); await p.waitForTimeout(300);
+    await p.goto("about:blank"); await p.goto(BASE.replace(/#.*$/, "") + "#/calendar"); await p.waitForTimeout(300);
     if (theme === "dark") await p.evaluate(() => { document.documentElement.setAttribute("data-theme", "dark"); });
     const r = await p.evaluate(() => {
       const css = (n, prop) => getComputedStyle(n)[prop];

@@ -257,3 +257,16 @@ dialog textarea{width:100%;border:1px solid var(--line);background:var(--card2);
 .theme-btn .i-moon{opacity:0;transform:rotate(-60deg) scale(.6)}
 :root[data-theme="dark"] .theme-btn .i-sun{opacity:0;transform:rotate(60deg) scale(.6)}
 :root[data-theme="dark"] .theme-btn .i-moon{opacity:1;transform:none}
+
+/* Pages: one page per section. Sticky tab bar on desktop/iPad, compact scrollable tab row on phone. */
+section[hidden],.hero-wrap[hidden],.hero[hidden]{display:none!important}
+main section{scroll-margin-top:64px}
+.pagenav{position:sticky;top:0;z-index:30;background:var(--bg);background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line);margin-top:16px}
+.pagenav-in{display:flex;gap:4px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:9px 0;-webkit-overflow-scrolling:touch}
+.pagenav-in::-webkit-scrollbar{display:none}
+.pagenav a{flex:0 0 auto;color:var(--muted);font-size:.9rem;font-weight:500;line-height:1.25;padding:9px 14px;border-radius:9999px;white-space:nowrap;text-decoration:none}
+.pagenav a:hover{color:var(--fg);background:var(--card);text-decoration:none}
+.pagenav a[aria-current="page"]{color:var(--fg);background:var(--card);font-weight:600;box-shadow:inset 0 0 0 1px var(--line)}
+.pagenav a:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;box-shadow:none}
+main section.page-first{padding-top:48px}
+@media (max-width:700px){main section.page-first{padding-top:36px}.pagenav-in{-webkit-mask-image:linear-gradient(to right,transparent,#000 14px,#000 calc(100% - 14px),transparent);mask-image:linear-gradient(to right,transparent,#000 14px,#000 calc(100% - 14px),transparent)}.pagenav{margin-top:12px}.pagenav-in{gap:2px;padding:7px 0}.pagenav a{font-size:.84rem;padding:8px 12px}}
