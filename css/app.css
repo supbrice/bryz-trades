@@ -247,3 +247,13 @@ button.day:hover{border-color:var(--muted2)}
 .mini li:first-child{border-top:0}
 dialog textarea{width:100%;border:1px solid var(--line);background:var(--card2);color:var(--fg);border-radius:12px;padding:10px 14px;font:inherit;font-size:.95rem}
 #dayDlg,#importDlg{width:min(480px,calc(100vw - 32px))}
+
+/* Theme toggle: 44px circle, sun in light mode, crescent moon in dark mode. */
+.theme-btn{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;width:44px;height:44px;min-width:44px;padding:0;margin:0;border-radius:9999px;border:1px solid var(--line);background:var(--card);color:var(--fg);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font:inherit;transition:background .15s ease,transform .08s ease}
+.theme-btn:hover{background:var(--line)}
+.theme-btn:active{transform:scale(.96)}
+.theme-btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:var(--ring)}
+.theme-btn svg{position:absolute;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;transition:opacity .25s ease,transform .35s ease}
+.theme-btn .i-moon{opacity:0;transform:rotate(-60deg) scale(.6)}
+:root[data-theme="dark"] .theme-btn .i-sun{opacity:0;transform:rotate(60deg) scale(.6)}
+:root[data-theme="dark"] .theme-btn .i-moon{opacity:1;transform:none}

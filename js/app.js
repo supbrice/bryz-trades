@@ -543,8 +543,8 @@
   /* ---------- Theme (same key as before) ---------- */
   function syncThemeBtn() {
     var dark = document.documentElement.getAttribute('data-theme') === 'dark';
-    $('themeBtn').textContent = dark ? 'Light mode' : 'Dark mode';
     $('themeBtn').setAttribute('aria-pressed', String(dark));
+    $('themeBtn').title = dark ? 'Switch to light mode' : 'Switch to dark mode';
   }
   $('themeBtn').addEventListener('click', function () {
     var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
