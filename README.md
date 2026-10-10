@@ -1,48 +1,41 @@
 # Bryz Trades
 
-A local-first trading journal for any ticker. Static site, no build step, no account, and no broker connection. It is published at <https://supbrice.github.io/bryz-trades/>.
+A local-first trading journal for any ticker. Static site, no build step, no account, no broker connection. Published at <https://supbrice.github.io/bryz-trades/> (GitHub Pages from `main`).
 
-Bryz Trades records trades and manual day notes on this device. It does not place orders or connect to a brokerage. A target or stop is a plan you wrote down. A closed trade uses the exit you entered. Nothing here claims the market touched a price.
-
-Nothing on the page loads an outside script or frame. Performance charts on Overview and Analytics are drawn from the journal in the page. They do not use a chart library, and they are not prices.
+Bryz Trades records trades and manual day notes on this device. It does not place orders, load prices, or connect to a brokerage or charting service. The page's Content-Security-Policy blocks every outside request (`connect-src 'none'`), and fonts (Inter, `fonts/`, SIL Open Font License in `fonts/OFL.txt`) are self-hosted.
 
 ## Screens
 
-Overview, Symbols, Trades, Risk, Analytics, Calendar, and Settings. On a phone the sections sit in a bottom bar with icons. From 700px the same list is an icon rail, and from 1100px the labels sit beside the icons. The wordmark and the Bryz Trades mark stay in the top bar with the period, Log trade, and the theme button. Type is Inter, self-hosted under `assets/fonts/` (SIL Open Font License, see `assets/fonts/OFL.txt`). Dark is the default palette. The sun and moon button still switches to light and stores the choice under `stock-tracker-theme`. If you have not chosen, the page follows the system setting. Light mode uses the same layout with darker green and red text so the figures stay readable.
+One page, top to bottom:
 
-A first visit starts empty. No sample trade is filled in. If this browser still has the previous tracker, or the original card stored under `sofi-levels-card-v1`, those records are migrated forward. The old copy is left in place, and a pre-migration backup is stored in this browser before the new journal is written.
+- **Hero** with today's date and how many trades are in the journal.
+- **How you're doing**: realized P/L, win rate, expectancy, and capital at risk on open positions, all computed by `js/calc.js`.
+- **Log a trade**: symbol, side, type (equity, call, put), quantity, entry, exit, hard stop, dates, fees, an optional manual mark, and notes. Editing a trade keeps every stored field the form does not show (exit lots, strategy, thesis, average cost, and so on).
+- **Recent trades** with All / Open / Closed / Cancelled filters, edit, close (a partial close adds an exit lot), and delete (with a confirm).
+- **Green and red days**: a month calendar of closed-trade P/L by exit date. Tap a day to see its trades and to keep a manual result and note. Manual results are shown apart from trade P/L and never added to it.
+- **Size every position**: the risk calculator (`js/calculateRisk.js`). "Remember" saves account size and risk percent into the journal settings.
+- **Your data, your file**: export a JSON backup, import one, and download trades or days as CSV.
 
-## Symbols, watchlist, and filters
+The sun/moon button switches light and dark and stores the choice under `stock-tracker-theme`. With no choice saved, the page follows the system setting.
 
-Any ticker or ETF that fits a symbol such as `AAPL` or `BRK.B` can be recorded. Symbols also accepts an optional exchange (`NASDAQ`, `NYSE`) stored with the watchlist. A few well-known tickers have a suggested exchange. That suggestion is only a venue hint. It is not a quote, and you can change it or leave it blank.
+A first visit starts empty. There is no sample data. Unrealized P/L appears only for an open trade where you typed a manual mark; otherwise it is N/A.
 
-The watchlist is the symbols in your journal, plus any symbol you add without a trade. Clicking a symbol shows that ticker’s closed P/L, win rate, and trade count, plus open positions with the stops and targets you recorded. There is no live price. Unrealized profit and loss stays **N/A** until you type a manual mark and, if you want, an as-of date. A missing mark is unavailable, not a quote.
+## Where the journal lives
 
-Trades filter by status, symbol, direction, strategy, and date. A date filter keeps a trade when its entry date, exit date, or a partial-exit date falls in the range. Analytics uses the same symbol and status filters on top of the exit-date range. Filtering does not delete anything. Open is the status for a position that is not realized, including one that only has a plan.
+`localStorage` on `supbrice.github.io`, so a journal saved by earlier versions of this site is picked up as-is:
 
-## Charts
+- `ladder-journal-v3`: the current journal (`schemaVersion: 3`).
+- `ladder-journal-v2`, `stock-tracker-v1`, `sofi-levels-card-v1`: older formats. They are migrated forward once and left in place. A pre-migration copy is stored under `ladder-journal-premigration` / `ladder-journal-premigration-v3` before the new journal is written.
+- `ladder-journal-preimport`: written before an import replaces or merges into the journal. If it cannot be stored, the import is cancelled.
+- `ladder-journal-v3-corrupt`: if the saved journal cannot be read, its text is copied here, a banner explains it, and saving stays paused until you choose "Start a new journal" or import a backup. Nothing is overwritten silently.
 
-Overview and Analytics draw realized P/L over time, daily bars, and by-ticker or by-month bars as inline SVG from closed trades. Those charts are not prices, and they are not account equity. The page does not load a market-data script or embed. There is no live or delayed quote. A price you type is the price you typed. A manual mark used for unrealized P/L is labeled as an estimate.
+Storage, schema, migrations, and math (`js/money.js`, `js/schema.js`, `js/storage.js`, `js/calc.js`, `js/calculateRisk.js`) are the same modules the previous version used, so stored data and totals are unchanged.
 
-The performance chart uses 1W, 1M, 3M, YTD, 1Y, All, or a custom start and end. Both custom dates are included. 1W, 1M, 3M, and 1Y run through today. YTD starts on 1 January.
+Another device, another browser, or a private window does not have the journal. There is no cloud sync. Clearing site data deletes it. Export a file if the numbers matter.
 
-Overview also lists Upcoming from the journal only: open positions with the stops and targets you recorded, entry dates still in the future, and manual days dated after today. It does not invent events.
+## Backup
 
-Return on account is shown only after an account size is saved. It is closed-trade net in the selected range divided by that size. It is not a market return. With no account size, the figure is left off the page.
-
-Log a trade from the top bar, or use the quick row on Overview: symbol, side, quantity, price, and date. Enter saves it. N moves focus there when you are not already typing. The date starts as today, and the side starts as the last side used in this visit. A full edit still holds fees, partial exits, and the rest of the journal.
-
-## Statuses
-
-These describe the journal, not the market.
-
-- **Open — not realized.** The trade is still in the journal. It is excluded from realized profit and loss. The target and hard stop are plans.
-- **Closed — recorded exit.** Realized results use the exit price, share count, fees, and exit date you entered. Bryz Trades does not know whether a target or stop was reached in the market.
-- **Cancelled — not realized.** Excluded from realized profit and loss.
-
-An exit reason of “recorded as target exit” or “recorded as stop exit” is your note. It is not a market check.
-
-The optional levels checklist compares a close you paste with get-in, get-out, and hard stop. Hard stop is checked first. A close equal to a level is not under it. The wording says the pasted close is under a level. It does not say the market hit that level. The checklist is not applied to short trades. A pasted close is never treated as an exit price.
+Export writes `bryz-trades-YYYY-MM-DD.json` with `app: "ladder"` and `schemaVersion: 3`. Older exports (`ladder-….json`, schema 2) still import. Import checks the file first and shows what it found. Merge skips ids you already have unless you tick overwrite, and skips closed trades that look the same unless you tick import similar. Manual days are kept or taken from the file, never summed. Replace swaps the whole journal after the pre-import copy is saved. A malformed file, duplicate ids, or a schema newer than 3 is rejected and the journal is left alone.
 
 ## Formulas
 
@@ -64,7 +57,7 @@ Entry price is the recorded entry price. If that field is blank and average entr
 
 Fees left blank are treated as `$0.00` and the trade is labeled that way. A negative fee, a missing exit price, a missing entry, or a missing share count leaves a closed trade incomplete. Incomplete trades are saved and excluded. No result is invented.
 
-Only closed trades with an entry, an exit price, a share count, and an exit date are included in realized totals, the calendar’s closed-trade line, analytics, and the curve. Open and cancelled trades are never included. A second copy of the same trade id is ignored.
+Only closed trades with an entry, an exit price, a share count, and an exit date are included in realized totals, the KPIs, and the calendar’s closed-trade line. Open and cancelled trades are never included. A second copy of the same trade id is ignored.
 
 ### Return
 
@@ -137,34 +130,22 @@ Realized net +13325. Three wins, three losses, one breakeven, so the win rate is
 
 ## Risk calculator
 
-`Planned risk = Account size × risk percent`
+`Planned risk = Account size × risk percent`. Risk per share is `entry − stop` for a long (stop below entry) and `stop − entry` for a short (stop above entry). Quantity is planned risk ÷ risk per share, rounded to 4 decimals. It is a planning estimate, not financial advice, and a stop does not guarantee the maximum loss.
 
-Per share, a long uses `entry − stop` and the stop must be below the entry. A short uses `stop − entry` and the stop must be above the entry. Quantity is planned risk ÷ risk per share, rounded to 4 decimal shares, half away from zero.
-
-The result is a planning estimate. It is not financial advice and it does not place an order. A stop does not guarantee the maximum loss. Actual losses can be larger because of gaps, slippage, fees, and execution. An optional target shows potential reward and reward-to-risk when it sits on the profitable side of the entry. A missing or unusable target does not change the size. Remembering account size and risk percent merges those two fields into the saved settings. It does not replace the watchlist or the selected symbol, and it does not change a risk limit on its own.
-
-Planned risk on Overview is the sum, for open positions, of remaining shares times the distance from the recorded entry to the recorded hard stop, when the stop is on the correct side. Positions missing an entry, a stop, or a share count are skipped and labeled. That figure is a plan. It is not a live stop, and Bryz Trades does not check whether the market traded there. If you have saved an account size, the page also shows that sum as a percent of it.
-
-## Backup
-
-Settings exports a JSON file with `schemaVersion: 3` and `app: "ladder"`, plus CSV files for trades and daily summaries. The downloaded names are `bryz-trades-….json`, `bryz-trades-trades-….csv`, and `bryz-trades-days-….csv`. A file saved earlier as `ladder-….json` still imports. Import reads the file contents, not the file name. Import checks the file first. Schema 2 files are upgraded on import. A malformed file, a duplicate id inside the file, or a schema newer than 3 is rejected and the saved journal is left as it was. Merge skips ids you already have unless you choose overwrite, and it skips closed trades that look the same unless you choose to import them. Manual days on the same date are kept or replaced, never summed. Replace asks you to confirm, and writes a pre-import backup in this browser before it swaps the journal. If that backup cannot be stored, nothing is changed.
-
-The current journal lives in this browser’s local storage (`ladder-journal-v3`). A schema 2 journal under `ladder-journal-v2` is copied forward once. The version 2 text is left in place, and a pre-migration backup is stored under `ladder-journal-premigration-v3` before the new key is written. If that backup cannot be stored, the upgraded journal is not written. Version 1 and the original card under `sofi-levels-card-v1` still migrate, with their own pre-migration backup, and are not deleted. Those storage keys stay so a journal saved on this origin is still here.
-
-Another device, another browser, or a private window does not have the journal. There is no cloud sync. Private browsing may drop it when the window closes. Clearing site data deletes it. Export a file first if the numbers matter. Bryz Trades does not send the journal anywhere unless you move an exported file yourself. No API key and no backend are required.
+Capital at risk on the KPIs is the sum, over open positions, of remaining shares × distance from the recorded entry to the recorded hard stop, when the stop is on the losing side. Positions without a stop are skipped.
 
 ## Tests
 
-Unit tests use Node’s built-in runner and do not install packages:
+Unit tests use Node's built-in runner and need no packages:
 
 ```sh
 node --test tests/*.test.js
 ```
 
-Browser checks live in `tests/browser.check.js`. The page does not load that folder. They open the site under `/bryz-trades/`, the same base path as GitHub Pages. They need Playwright and a Chromium build on the machine running them:
+`tests/browser.check.js` drives the page in Chrome with fixture journals in every stored shape (v3, v2, v1, the SOFI card, and an exported backup). It checks the totals against `js/calc.js`, CRUD, reload persistence, import/export, the corrupt-journal banner, layout at 390/768/1440 px, console errors, and that no outside request is made. It needs `playwright-core` and Chrome (`CHROME=/path/to/chrome` if it is not at `/usr/bin/google-chrome`):
 
 ```sh
-node tests/browser.check.js
+npm i --no-save playwright-core && node tests/browser.check.js
 ```
 
 Not financial advice. Does not place trades.

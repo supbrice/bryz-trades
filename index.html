@@ -1,656 +1,260 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#090B0A" />
-  <script>
-    (function () {
-      var key = "stock-tracker-theme";
-      var theme = "dark";
-      try {
-        var saved = localStorage.getItem(key);
-        if (saved === "light" || saved === "dark") theme = saved;
-        else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
-      } catch (e) {}
-      document.documentElement.setAttribute("data-theme", theme);
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", theme === "light" ? "#F3F6F3" : "#090B0A");
-    })();
-  </script>
-  <meta name="description" content="Bryz Trades — a local trading journal. Not financial advice." />
-  <meta name="application-name" content="Bryz Trades" />
-  <meta name="apple-mobile-web-app-title" content="Bryz Trades" />
-  <meta property="og:title" content="Bryz Trades" />
-  <meta property="og:description" content="Bryz Trades — a local trading journal. Not financial advice." />
-  <title>Bryz Trades</title>
-  <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
-  <link rel="icon" href="assets/bryz-trades-logo.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
-  <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/pro.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff">
+<title>Bryz Trades</title>
+<meta name="description" content="Bryz Trades — a local trading journal. Not financial advice.">
+<meta name="application-name" content="Bryz Trades">
+<meta name="apple-mobile-web-app-title" content="Bryz Trades">
+<link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="assets/bryz-trades-logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
+<link rel="preload" href="fonts/inter-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+<script src="js/theme.js"></script>
 </head>
-<body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="tab-shell">
-      <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-selected="true" aria-controls="view-dashboard"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><span class="nav-label">Overview</span></button>
-        <button type="button" role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="view-markets"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="2.2"></circle><circle cx="16" cy="8" r="2.2"></circle><circle cx="8" cy="16" r="2.2"></circle><circle cx="16" cy="16" r="2.2"></circle></svg><span class="nav-label">Symbols</span></button>
-        <button type="button" role="tab" id="tab-positions" data-tab="positions" aria-selected="false" aria-controls="view-positions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h10"></path></svg><span class="nav-label">Trades</span></button>
-        <button type="button" role="tab" id="tab-risk" data-tab="risk" aria-selected="false" aria-controls="view-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path></svg><span class="nav-label">Risk</span></button>
-        <button type="button" role="tab" id="tab-analytics" data-tab="analytics" aria-selected="false" aria-controls="view-analytics"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path></svg><span class="nav-label">Analytics</span></button>
-        <button type="button" role="tab" id="tab-calendar" data-tab="calendar" aria-selected="false" aria-controls="view-calendar"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span class="nav-label">Calendar</span></button>
-        <button type="button" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" aria-controls="view-settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg><span class="nav-label">Settings</span></button>
-      </nav>
-      </div>
-    </aside>
-    <div class="workspace">
-    <header class="topbar">
-      <div class="brand-row">
-        <div class="brand">
-          <img class="logo" src="assets/bryz-trades-logo.svg" alt="" width="32" height="32" />
-          <h1>Bryz Trades</h1>
-        </div>
-      </div>
-      <div class="toolbar">
-        <h2 id="pageTitle">Overview</h2>
-        <div class="range-bar top-range">
-          <label>Range
-            <select id="overviewPreset" aria-label="Performance range">
-              <option value="1w">1W</option>
-              <option value="1m">1M</option>
-              <option value="3m">3M</option>
-              <option value="ytd" selected>YTD</option>
-              <option value="1y">1Y</option>
-              <option value="all">All</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>From
-            <input id="overviewFrom" type="date" />
-          </label>
-          <label>To
-            <input id="overviewTo" type="date" />
-          </label>
-        </div>
-        <button type="button" id="topLogTrade" class="primary">Log trade</button>
-      </div>
-      <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="true" aria-label="Dark mode, switch to light mode" title="Switch to light mode">
-        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
-        </svg>
-        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-          <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
-        </svg>
-        <span class="visually-hidden" id="themeToggleLabel">Dark</span>
-      </button>
-      <p class="sub">Local journal and analysis. <strong>Not financial advice.</strong> Does not place trades.</p>
+<body class="has-texture">
+<a class="skip" href="#log">Skip to log a trade</a>
+
+<div class="hero-wrap">
+  <div class="texture" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="#top" id="top" aria-label="Bryz Trades home"><img src="assets/bryz-trades-logo.svg" alt="" width="34" height="34"><span class="word">Bryz Trades</span></a>
+      <button type="button" class="btn ghost sm" id="themeBtn" aria-pressed="false">Dark mode</button>
     </header>
+    <div class="banner" id="banner" role="alert" hidden><span id="bannerText"></span><button type="button" class="btn sec sm" id="startFresh" hidden>Start a new journal</button></div>
 
-    <div id="banner" class="banner" role="status" hidden></div>
-
-    <div class="shell">
-      <main class="views">
-        <section id="view-dashboard" class="view active" role="tabpanel" aria-labelledby="tab-dashboard">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Overview</h2>
-              <button type="button" id="dashAddTrade" class="primary">Log trade</button>
-            </div>
-            <p class="hint">Recorded exits only. A stop is a plan, not a market fill. Prices you type are not a live quote.</p>
-            <form id="quickAdd" class="quick-add">
-              <label>Symbol
-                <input id="quickSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" data-tip="Ticker you record. Any symbol that fits AAPL or BRK.B." />
-              </label>
-              <label>Side
-                <select id="quickSide" data-tip="Starts as the last side you used in this visit.">
-                  <option value="long">Long</option>
-                  <option value="short">Short</option>
-                </select>
-              </label>
-              <label>Qty
-                <input id="quickQty" inputmode="decimal" autocomplete="off" placeholder="10" />
-              </label>
-              <label>Price
-                <input id="quickPrice" inputmode="decimal" autocomplete="off" placeholder="100.00" data-tip="The price you type. It is not a live or delayed quote." />
-              </label>
-              <label>Date
-                <input id="quickDate" type="date" data-tip="Defaults to today." />
-              </label>
-              <button type="submit" class="primary quick-submit" id="quickSave">Add</button>
-              <p id="quickError" class="form-error" role="alert" hidden></p>
-              <p class="hint quick-hint">N focuses this row. Enter saves it. The price is the one you type.</p>
-            </form>
-            <div id="dashboardBody" aria-busy="true">
-              <div class="skeleton-grid" aria-hidden="true">
-                <span class="skeleton"></span>
-                <span class="skeleton"></span>
-                <span class="skeleton"></span>
-                <span class="skeleton"></span>
-              </div>
-            </div>
-            <form id="sizeForm" class="size-widget chart-card">
-              <div class="card-title"><h3>Position size</h3></div>
-              <p class="hint">Planning math from numbers you type. Shares use the stop distance. Options contracts use that distance times 100. Nothing here is a quote.</p>
-              <div class="size-grid">
-                <label>Account capital ($)
-                  <input id="sizeCapital" inputmode="decimal" autocomplete="off" />
-                </label>
-                <label>Risk percent
-                  <input id="sizeRisk" inputmode="decimal" autocomplete="off" />
-                </label>
-                <label>Entry
-                  <input id="sizeEntry" inputmode="decimal" autocomplete="off" />
-                </label>
-                <label>Stop
-                  <input id="sizeStop" inputmode="decimal" autocomplete="off" />
-                </label>
-                <label>Size as
-                  <select id="sizeAsset">
-                    <option value="shares">Shares</option>
-                    <option value="options">Options contracts</option>
-                  </select>
-                </label>
-              </div>
-              <div class="button-row">
-                <button type="submit" class="primary" id="sizeCalcBtn">Calculate size</button>
-              </div>
-              <div id="sizeResult" class="result-box" role="status"></div>
-            </form>
-            <div class="button-row shortcuts">
-              <button type="button" id="dashPositions">Open positions</button>
-              <button type="button" id="gotoAnalytics">Analytics</button>
-              <button type="button" id="gotoCalendar">Calendar</button>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-markets" class="view" role="tabpanel" aria-labelledby="tab-markets" hidden>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Symbols</h2>
-            </div>
-            <p class="hint">Closed results, plans, and the watchlist. No live prices.</p>
-            <form id="symbolForm" class="symbol-bar">
-              <label>Symbol
-                <input id="symbolSearch" list="symbolSuggestions" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" />
-              </label>
-              <label>Exchange
-                <input id="symbolExchange" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="NASDAQ" />
-              </label>
-              <button type="submit" id="symbolApply">Show symbol</button>
-              <button type="button" id="watchAdd">Add to watchlist</button>
-              <button type="button" id="exchangeHint" hidden>Use suggested exchange</button>
-            </form>
-            <datalist id="symbolSuggestions"></datalist>
-            <p id="exchangeHintText" class="hint"></p>
-            <div id="watchlistBody"></div>
-          </div>
-          <div class="panel" id="symbolDetail">
-            <div class="panel-head">
-              <h2>Symbol</h2>
-            </div>
-            <div id="symbolDetailBody"></div>
-          </div>
-        </section>
-
-        <section id="view-positions" class="view" role="tabpanel" aria-labelledby="tab-positions" hidden>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Trades</h2>
-              <button type="button" id="addTradeBtn" class="primary">Log trade</button>
-            </div>
-            <p class="hint">A target or stop is a plan you wrote down, not a fill.</p>
-            <details class="legend">
-              <summary>What the statuses mean</summary>
-              <ul>
-                <li><strong>Open — not realized.</strong> Still in the journal. Excluded from realized profit and loss.</li>
-                <li><strong>Closed — recorded exit.</strong> Uses the exit price, fees, and exit date you entered. Bryz Trades does not check the market.</li>
-                <li><strong>Cancelled — not realized.</strong> Excluded from realized profit and loss.</li>
-              </ul>
-            </details>
-            <div class="range-bar">
-              <label class="inline-field">Status
-                <select id="positionFilter">
-                  <option value="all">All trades</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </label>
-              <label>Symbol
-                <input id="positionSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
-              </label>
-              <label class="inline-field">Direction
-                <select id="positionDirection">
-                  <option value="all">Any direction</option>
-                  <option value="long">Long</option>
-                  <option value="short">Short</option>
-                </select>
-              </label>
-              <label>Strategy
-                <input id="positionStrategy" maxlength="40" autocomplete="off" placeholder="Any" />
-              </label>
-              <label>From
-                <input id="positionFrom" type="date" />
-              </label>
-              <label>To
-                <input id="positionTo" type="date" />
-              </label>
-            </div>
-            <div id="positionsList"><p class="empty">Loading journal…</p></div>
-          </div>
-        </section>
-
-        <section id="view-calendar" class="view" role="tabpanel" aria-labelledby="tab-calendar" hidden>
-          <div class="panel">
-            <div class="month-nav">
-              <button type="button" id="prevMonth" aria-label="Previous month">‹</button>
-              <h2 id="monthLabel">Month</h2>
-              <button type="button" id="nextMonth" aria-label="Next month">›</button>
-            </div>
-            <div class="month-actions">
-              <button type="button" id="todayBtn" hidden>Today</button>
-              <button type="button" id="logTodayBtn" class="primary">Log today</button>
-            </div>
-            <div id="summary" aria-live="polite"></div>
-            <div id="calendarGrid" class="calendar" role="group"></div>
-            <p class="hint calendar-hint">Closed-trade P/L by exit date. Manual days stay separate.</p>
-            <div id="weekList"></div>
-          </div>
-        </section>
-
-        <section id="view-analytics" class="view" role="tabpanel" aria-labelledby="tab-analytics" hidden>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Analytics</h2>
-            </div>
-            <p class="hint">Closed trades in the range only. Open trades are not counted as profit.</p>
-            <div class="seg" role="group" aria-label="Analytics breakdown">
-              <button type="button" data-pane="overview" aria-pressed="true">Overview</button>
-              <button type="button" data-pane="symbol" aria-pressed="false">Symbol</button>
-              <button type="button" data-pane="strategy" aria-pressed="false">Strategy</button>
-              <button type="button" data-pane="time" aria-pressed="false">Time</button>
-            </div>
-            <div class="range-bar">
-              <label>Range
-                <select id="rangePreset" aria-label="Analytics range">
-                  <option value="1w">1W</option>
-                  <option value="1m">1M</option>
-                  <option value="3m">3M</option>
-                  <option value="ytd" selected>YTD</option>
-                  <option value="1y">1Y</option>
-                  <option value="all">All</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </label>
-              <label>From
-                <input id="rangeFrom" type="date" />
-              </label>
-              <label>To
-                <input id="rangeTo" type="date" />
-              </label>
-              <label>Symbol
-                <input id="analyticsSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Any" />
-              </label>
-              <label>Status
-                <select id="analyticsStatus">
-                  <option value="all">All statuses</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </label>
-            </div>
-            <p id="rangeHint" class="hint"></p>
-            <div id="analyticsBody"></div>
-          </div>
-        </section>
-
-        <section id="view-risk" class="view" role="tabpanel" aria-labelledby="tab-risk" hidden>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Risk</h2>
-            </div>
-            <p class="hint" id="riskDisclaimer">Planning math from numbers you type. A stop does not cap a real loss.</p>
-            <div class="row-2">
-              <label>Account size ($)
-                <input id="riskAccount" inputmode="decimal" autocomplete="off" placeholder="10000" />
-              </label>
-              <label>Risk percent
-                <input id="riskPercent" inputmode="decimal" autocomplete="off" placeholder="1" />
-              </label>
-            </div>
-            <div class="row-2">
-              <label>Entry price ($)
-                <input id="riskEntry" inputmode="decimal" autocomplete="off" placeholder="50" />
-              </label>
-              <label>Stop price ($)
-                <input id="riskStop" inputmode="decimal" autocomplete="off" placeholder="48" />
-              </label>
-            </div>
-            <div class="row-2">
-              <label>Direction
-                <select id="riskDirection">
-                  <option value="long">Long</option>
-                  <option value="short">Short</option>
-                </select>
-              </label>
-              <label>Size as
-                <select id="riskAsset">
-                  <option value="shares">Shares</option>
-                  <option value="options">Options contracts</option>
-                </select>
-              </label>
-            </div>
-            <div class="row-2">
-              <label>Planned target ($)
-                <input id="riskTarget" inputmode="decimal" autocomplete="off" placeholder="Optional" />
-              </label>
-            </div>
-            <label class="check"><input type="checkbox" id="riskRemember" /> Remember account size and risk percent on this device</label>
-            <div class="button-row">
-              <button type="button" id="riskCalcBtn" class="primary">Calculate size</button>
-            </div>
-            <div id="riskResult" class="result-box" role="status"></div>
-          </div>
-        </section>
-
-        <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings" hidden>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Settings and backup</h2>
-            </div>
-            <h3 class="section-title">Backup</h3>
-            <p class="hint">The file stays on this device unless you move it yourself. Bryz Trades does not upload it.</p>
-            <div class="button-row">
-              <button type="button" id="exportJsonBtn" class="primary">Export JSON</button>
-              <button type="button" id="exportTradesCsvBtn">Trades CSV</button>
-              <button type="button" id="exportDaysCsvBtn">Days CSV</button>
-            </div>
-            <h3 class="section-title">Restore</h3>
-            <p class="hint">Import checks the file before it changes anything. Merge keeps this journal and adds what is new. Replace swaps in the file after a backup is stored here. Matching trade ids are not counted twice.</p>
-            <div class="button-row">
-              <button type="button" id="importBtn">Choose JSON file</button>
-              <input type="file" id="importFile" accept="application/json,.json" hidden />
-            </div>
-            <h3 class="section-title">How saving works</h3>
-            <div id="storageHelp" class="prose">
-              <p>The journal is stored in this browser’s local storage on this device. It is not an account, and it is not sent to a server.</p>
-              <p>Another browser, another device, or a private-browsing window has its own empty copy. Private browsing may delete the journal when the window closes.</p>
-              <p>Clearing site data, cookies, or history for this site deletes the journal. Export a JSON backup first if the records matter.</p>
-              <p>A failed save or a failed import leaves the previous copy in place. Before an upgrade or import, Bryz Trades also keeps a backup copy in this browser.</p>
-              <p id="schemaLine">Schema version 3. Older journals in this browser are copied forward. The previous copy is kept.</p>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <p class="footer-note"><span id="saveState">Saved on this device</span>. Export a backup before you clear site data. Nothing here buys or sells. There is no cloud sync.</p>
-    <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
-    <aside id="tradeDrawer" class="drawer" hidden>
-      <div class="drawer-card" role="dialog" aria-labelledby="drawerTitle">
-        <div class="drawer-head">
-          <h2 id="drawerTitle">Trade</h2>
-          <button type="button" id="drawerClose" class="icon-btn" aria-label="Close trade detail">×</button>
-        </div>
-        <div id="drawerBody"></div>
+    <section class="hero">
+      <span class="badge"><i id="heroDate">Today</i> · <span id="heroCount">Your journal</span></span>
+      <h1>Your trades.<br>Your numbers.</h1>
+      <p class="lead">Log every trade and see your real P&amp;L, win rate and risk, straight from your own journal. No broker. No live prices.</p>
+      <div class="cta">
+        <a class="btn pri" href="#log" id="heroLog">Log trade</a>
+        <a class="btn sec" href="#backup">Import backup</a>
       </div>
-    </aside>
-    </div>
+      <p class="fine" id="saveState">Saved in this browser only · No account · Back up anytime</p>
+    </section>
   </div>
+</div>
 
-  <dialog id="tradeDialog" aria-labelledby="tradeDialogTitle">
-    <form id="tradeForm">
-      <div class="dialog-head">
-        <h2 id="tradeDialogTitle">Add trade</h2>
-        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+<main class="wrap">
+  <section id="stats" aria-labelledby="h-stats">
+    <span class="badge"><i>All time</i> · Closed trades, net of fees</span>
+    <h2 id="h-stats">How you're doing.</h2>
+    <div class="grid g4" id="kpis"></div>
+    <p class="note" id="kpiNote" hidden></p>
+  </section>
+
+  <section id="log" aria-labelledby="h-log">
+    <h2 id="h-log">Log a trade.</h2>
+    <p class="lead sm">Leave exit empty for an open position. Options use the 100× contract multiplier.</p>
+    <form class="card form" id="tradeForm" novalidate>
+      <div class="form-sum" id="formSummary" role="alert" hidden></div>
+      <div class="form-grid">
+        <div class="f f-sym">
+          <label for="f-symbol">Symbol</label>
+          <input id="f-symbol" name="symbol" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AAPL" maxlength="10">
+          <p class="err" id="e-symbol"></p>
+        </div>
+        <fieldset class="f f-side">
+          <legend>Side</legend>
+          <div class="seg">
+            <input type="radio" name="direction" id="side-long" value="long" checked><label for="side-long">Long</label>
+            <input type="radio" name="direction" id="side-short" value="short"><label for="side-short">Short</label>
+          </div>
+        </fieldset>
+        <fieldset class="f f-type">
+          <legend>Type</legend>
+          <div class="seg">
+            <input type="radio" name="assetType" id="type-eq" value="" checked><label for="type-eq">Equity</label>
+            <input type="radio" name="assetType" id="type-call" value="call"><label for="type-call">Call</label>
+            <input type="radio" name="assetType" id="type-put" value="put"><label for="type-put">Put</label>
+          </div>
+        </fieldset>
+        <div class="f">
+          <label for="f-qty"><span id="qtyLabel">Shares</span></label>
+          <input id="f-qty" name="quantity" inputmode="decimal" placeholder="10">
+          <p class="err" id="e-quantity"></p>
+        </div>
+        <div class="f">
+          <label for="f-entry">Entry <span class="opt" id="entryHint">per share</span></label>
+          <input id="f-entry" name="entryPrice" inputmode="decimal" placeholder="100.00">
+          <p class="err" id="e-entryPrice"></p>
+        </div>
+        <div class="f">
+          <label for="f-exit">Exit <span class="opt">optional</span></label>
+          <input id="f-exit" name="exitPrice" inputmode="decimal" placeholder="—">
+          <p class="err" id="e-exitPrice"></p>
+        </div>
+        <div class="f">
+          <label for="f-stop">Stop <span class="opt">optional</span></label>
+          <input id="f-stop" name="hardStop" inputmode="decimal" placeholder="—">
+          <p class="err" id="e-hardStop"></p>
+        </div>
+        <div class="f">
+          <label for="f-date">Date</label>
+          <input id="f-date" name="entryDate" type="date">
+          <p class="err" id="e-entryDate"></p>
+        </div>
+        <div class="f" id="closeDateField" hidden>
+          <label for="f-closeDate">Close date</label>
+          <input id="f-closeDate" name="exitDate" type="date">
+          <p class="err" id="e-exitDate"></p>
+        </div>
+        <div class="f">
+          <label for="f-fees">Fees <span class="opt">optional</span></label>
+          <input id="f-fees" name="fees" inputmode="decimal" placeholder="0.00">
+          <p class="err" id="e-fees"></p>
+        </div>
+        <div class="f" id="markField">
+          <label for="f-mark">Mark price <span class="opt">optional · you type it</span></label>
+          <input id="f-mark" name="markPrice" inputmode="decimal" placeholder="—">
+          <p class="err" id="e-markPrice"></p>
+        </div>
+        <div class="f f-notes">
+          <label for="f-notes">Notes <span class="opt">optional</span></label>
+          <textarea id="f-notes" name="notes" rows="2" maxlength="2000"></textarea>
+        </div>
       </div>
-      <p id="tradeStatusHelp" class="dialog-lead"></p>
-      <div id="tradeResult" class="result-box" hidden></div>
-      <fieldset id="tradeFields">
-        <div class="row-2">
-          <label>Ticker
-            <input id="fieldSymbol" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="AAPL" required />
-          </label>
-          <label>Exchange
-            <input id="fieldExchange" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Optional" />
-          </label>
-          <label>Asset name
-            <input id="fieldName" maxlength="80" autocomplete="off" placeholder="Optional" />
-          </label>
-        </div>
-        <div class="row-2">
-          <label>Direction
-            <select id="fieldDirection">
-              <option value="long">Long</option>
-              <option value="short">Short</option>
-            </select>
-          </label>
-          <label>Type
-            <select id="fieldAsset">
-              <option value="equity">Equity</option>
-              <option value="call">Call</option>
-              <option value="put">Put</option>
-            </select>
-          </label>
-          <label>Status
-            <select id="fieldStatus">
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </label>
-        </div>
-        <div class="row-2">
-          <label>Shares
-            <input id="fieldShares" inputmode="decimal" autocomplete="off" placeholder="50 or 0.5" />
-          </label>
-          <label>Fees ($)
-            <input id="fieldFees" inputmode="decimal" autocomplete="off" placeholder="0.00" />
-          </label>
-        </div>
-        <div class="row-2">
-          <label>Entry price ($)
-            <input id="fieldEntry" inputmode="decimal" autocomplete="off" placeholder="100.00" />
-          </label>
-          <label>Average entry cost ($)
-            <input id="fieldAvg" inputmode="decimal" autocomplete="off" placeholder="Optional" />
-          </label>
-        </div>
-        <p class="hint">Profit and loss uses entry price when both prices are filled. If entry price is blank, average cost is used. Long return divides by shares × that price. Short return divides by the sale proceeds, shares × that price, not by margin. Call and Put multiply profit, loss, and cost by 100. Equity does not. Leaving type as Equity does not rewrite a saved trade that has no type.</p>
-        <div class="row-2">
-          <label>Planned target ($)
-            <input id="fieldTarget" inputmode="decimal" autocomplete="off" />
-          </label>
-          <label>Planned hard stop ($)
-            <input id="fieldHardStop" inputmode="decimal" autocomplete="off" />
-          </label>
-        </div>
-        <div class="row-2">
-          <label>Entry date
-            <input id="fieldEntryDate" type="date" />
-          </label>
-          <label>Exit date
-            <input id="fieldExitDate" type="date" />
-          </label>
-        </div>
-        <div class="row-2">
-          <label>Closing price ($)
-            <input id="fieldExit" inputmode="decimal" autocomplete="off" placeholder="Recorded exit" />
-          </label>
-          <label>Recorded exit reason
-            <select id="fieldExitReason">
-              <option value="">Not recorded</option>
-              <option value="target">Recorded as target exit</option>
-              <option value="stop">Recorded as stop exit</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-        </div>
-        <p class="hint">The closing price is the exit you write down when the whole position is closed in one lot. Choosing a target or stop reason does not mean the market reached that level. No live price is loaded.</p>
-        <details id="partialDetails">
-          <summary>Partial exits</summary>
-          <p class="hint">Average-cost method. Every exit uses the same recorded entry price. Selling some shares leaves the rest open. Each lot has its own fees. A blank fee on a lot is treated as $0.00.</p>
-          <div id="exitRows"></div>
-          <button type="button" id="addExitBtn">Add partial exit</button>
-        </details>
-        <div class="row-2">
-          <label>Manual mark, estimate ($)
-            <input id="fieldMark" inputmode="decimal" autocomplete="off" placeholder="Estimate you type" data-tip="An estimate you type for unrealized P/L. It is not a live or delayed quote." />
-          </label>
-          <label>Mark as of
-            <input id="fieldMarkAsOf" type="date" />
-          </label>
-        </div>
-        <p class="hint">Unrealized P/L is N/A until you enter a mark. The mark is an estimate you type. It is not a market price.</p>
-        <div class="row-2">
-          <label>Strategy
-            <input id="fieldStrategy" maxlength="80" autocomplete="off" />
-          </label>
-          <label>Setup
-            <input id="fieldSetup" maxlength="80" autocomplete="off" />
-          </label>
-        </div>
-        <label>Thesis
-          <textarea id="fieldThesis" rows="2" maxlength="2000"></textarea>
-        </label>
-        <label>Lessons learned
-          <textarea id="fieldLessons" rows="2" maxlength="2000"></textarea>
-        </label>
-        <label>Notes
-          <textarea id="fieldNotes" rows="2" maxlength="2000"></textarea>
-        </label>
-        <details id="levelsDetails">
-          <summary>Levels checklist</summary>
-          <p class="hint">Optional, and only a comparison with a close you paste. Hard stop is checked before get-out. A close equal to a level is not under it. This does not place or cancel orders.</p>
-          <div class="row-2">
-            <label>Get-in ($)
-              <input id="fieldGetIn" inputmode="decimal" autocomplete="off" />
-            </label>
-            <label>Get-out ($)
-              <input id="fieldGetOut" inputmode="decimal" autocomplete="off" />
-            </label>
-          </div>
-          <div class="row-2">
-            <label>Limit status
-              <select id="fieldOrder">
-                <option value="">Not using</option>
-                <option value="waiting">waiting</option>
-                <option value="filled">filled</option>
-                <option value="cancelled">cancelled</option>
-              </select>
-            </label>
-            <label>Fill price ($)
-              <input id="fieldFill" inputmode="decimal" autocomplete="off" placeholder="only if filled" disabled />
-            </label>
-          </div>
-          <label>Official close you paste ($)
-            <input id="fieldClose" inputmode="decimal" autocomplete="off" placeholder="not a live quote" />
-          </label>
-          <div id="statusPreview" class="status wait" hidden>
-            <div class="status-label">Checklist</div>
-            <div class="status-line" id="statusPreviewLine"></div>
-            <p class="hint" id="statusPreviewDetail"></p>
-          </div>
-        </details>
-      </fieldset>
-      <p id="tradeError" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions">
-        <button type="submit" class="primary" id="tradeSaveBtn">Save trade</button>
-        <button type="button" id="tradeEditBtn" hidden>Edit</button>
-        <button type="button" id="tradeCloseBtn" hidden>Close trade</button>
-        <button type="button" id="tradeDeleteBtn" hidden>Delete</button>
-        <button type="button" data-close-dialog>Cancel</button>
+      <p class="note" id="exitsNote" hidden></p>
+      <div class="form-foot">
+        <button type="submit" class="btn pri" id="submitBtn">Log trade</button>
+        <button type="button" class="btn sec" id="cancelEdit" hidden>Cancel edit</button>
+        <p class="preview" id="formPreview" aria-live="polite"></p>
       </div>
     </form>
-  </dialog>
+  </section>
 
-  <dialog id="dayDialog" aria-labelledby="dayDialogTitle">
-    <form id="dayForm">
-      <div class="dialog-head">
-        <h2 id="dayDialogTitle">Day</h2>
-        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+  <section id="trades" aria-labelledby="h-trades">
+    <span class="badge"><i id="tradesBadge">0 trades</i> · Newest first</span>
+    <h2 id="h-trades">Recent trades.</h2>
+    <div class="chips" id="chips" role="group" aria-label="Filter trades"></div>
+    <div class="card table-card">
+      <div class="scroll" tabindex="0" role="region" aria-label="Trades table, scrolls sideways">
+        <table>
+          <thead><tr><th>Date</th><th>Symbol</th><th>Trade</th><th class="r">Qty</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">P&amp;L</th><th>Status</th><th class="r"><span class="sr">Actions</span></th></tr></thead>
+          <tbody id="tradeRows"></tbody>
+        </table>
       </div>
-      <p class="dialog-lead">Closed trades and manual entries stay on separate lines. Bryz Trades does not add them together.</p>
-      <div id="dayTrades" class="result-box"></div>
-      <h3 class="section-title">Manual entry</h3>
-      <p class="hint">A hand-typed day result from before trade-level tracking, or an account note you want to keep. It is labeled manual and is not a closed trade.</p>
-      <div class="sign-toggle" role="group" aria-label="Manual gain or loss">
-        <button type="button" id="signGain" aria-pressed="true">Gain</button>
-        <button type="button" id="signLoss" aria-pressed="false">Loss</button>
+      <p class="empty" id="tradesEmpty" hidden>No trades yet. Log your first one above, or import a backup below.</p>
+    </div>
+    <div class="more-row" id="moreRow" hidden><button type="button" class="btn sec sm" id="moreBtn">Show more</button></div>
+  </section>
+
+  <section id="calendar" aria-labelledby="h-cal">
+    <h2 id="h-cal">Green and red days.</h2>
+    <p class="lead sm">Net realized P&amp;L by close date. Tap a day for details or a manual note.</p>
+    <div class="card cal-card">
+      <div class="cal-head">
+        <button type="button" class="btn ghost icon" id="calPrev" aria-label="Previous month">‹</button>
+        <div class="cal-title"><strong id="calTitle"></strong><span id="calTotal"></span></div>
+        <button type="button" class="btn ghost icon" id="calNext" aria-label="Next month">›</button>
       </div>
-      <label>Manual amount ($)
-        <input id="dayAmount" inputmode="decimal" autocomplete="off" placeholder="Leave blank if none" />
-      </label>
-      <label>Note
-        <textarea id="dayNote" rows="2" maxlength="2000" placeholder="Optional"></textarea>
-      </label>
-      <div class="split-head">
-        <p class="section-title">Split the manual entry</p>
-        <button type="button" id="addSplitBtn">Add split</button>
+      <div class="cal-grid" id="calGrid" role="grid" aria-labelledby="calTitle"></div>
+      <p class="s cal-foot" id="calFoot"></p>
+    </div>
+  </section>
+
+  <section id="size" aria-labelledby="h-size">
+    <h2 id="h-size">Size every position.</h2>
+    <p class="lead sm">Set your risk once. Get shares or contracts in a second.</p>
+    <form class="card" id="sizeForm" novalidate>
+      <div class="seg toggle" role="radiogroup" aria-label="Instrument">
+        <input type="radio" name="mode" id="mode-sh" value="shares" checked><label for="mode-sh">Shares</label>
+        <input type="radio" name="mode" id="mode-op" value="options"><label for="mode-op">Options</label>
       </div>
-      <p class="hint">This split only describes the manual amount. It is not added to realized P/L.</p>
-      <div id="splitRows"></div>
-      <p id="splitHint" class="hint"></p>
-      <h3 class="section-title">Account adjustment</h3>
-      <p class="hint">A deposit, withdrawal, or other account change. It is not trading profit or loss and is not added to either total.</p>
-      <label>Adjustment amount ($)
-        <input id="dayAdjustment" inputmode="decimal" autocomplete="off" placeholder="0.00 or -10" />
-      </label>
-      <label>Adjustment note
-        <input id="dayAdjustmentNote" maxlength="500" autocomplete="off" />
-      </label>
-      <p id="dayError" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions">
-        <button type="submit" class="primary">Save day</button>
-        <button type="button" id="clearDayBtn" hidden>Clear manual day</button>
+      <div class="calc">
+        <div class="f"><label for="s-account">Account</label><input id="s-account" name="account" inputmode="decimal" placeholder="10000"></div>
+        <div class="f"><label for="s-risk">Risk %</label><input id="s-risk" name="risk" inputmode="decimal" placeholder="1"></div>
+        <div class="f"><label for="s-entry" id="s-entryLabel">Entry</label><input id="s-entry" name="entry" inputmode="decimal" placeholder="150.00"></div>
+        <div class="f"><label for="s-stop">Stop</label><input id="s-stop" name="stop" inputmode="decimal" placeholder="140.00"></div>
       </div>
+      <label class="check-row"><input type="checkbox" id="s-remember"> Remember account size and risk % on this device</label>
+      <div class="grid g3 results" id="sizeOut" aria-live="polite"></div>
     </form>
-  </dialog>
+  </section>
 
-  <dialog id="importDialog" aria-labelledby="importDialogTitle">
-    <form id="importForm">
-      <div class="dialog-head">
-        <h2 id="importDialogTitle">Import backup</h2>
-        <button type="button" class="icon-btn" data-close-dialog aria-label="Close">×</button>
+  <section id="backup" aria-labelledby="h-backup">
+    <h2 id="h-backup">Your data, your file.</h2>
+    <p class="lead sm">Everything lives in this browser. Export a backup or bring one back. Older Ladder and Bryz Trades backups work too.</p>
+    <div class="grid g3">
+      <div class="card feature">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></div>
+        <div class="k">Export</div><p class="s">Download your whole journal as a JSON backup.</p>
+        <button type="button" class="btn sec sm" id="exportBtn">Export JSON</button>
       </div>
-      <div id="importSummary" class="prose"></div>
-      <fieldset>
-        <legend>How to apply it</legend>
-        <label class="check"><input type="radio" name="importMode" value="merge" checked /> Merge — add what is new and keep this journal</label>
-        <label class="check"><input type="radio" name="importMode" value="replace" /> Replace — swap in the file</label>
-      </fieldset>
-      <label class="check"><input type="checkbox" id="importOverwrite" /> Overwrite saved trades that share an id</label>
-      <label class="check"><input type="checkbox" id="importSimilar" /> Also import closed trades that look the same as ones already counted</label>
-      <fieldset>
-        <legend>Manual days on the same date</legend>
-        <label class="check"><input type="radio" name="importDays" value="keep" checked /> Keep the saved manual day</label>
-        <label class="check"><input type="radio" name="importDays" value="file" /> Use the file’s manual day</label>
-      </fieldset>
-      <p class="hint">Same-day amounts are not added together. Similar closed trades are skipped unless you check the box, so a second copy does not inflate results.</p>
-      <label class="check" id="replaceConfirmLabel" hidden><input type="checkbox" id="replaceConfirm" /> I understand replace removes saved trades that are not in this file. A backup of the current journal is stored in this browser first.</label>
-      <p id="importError" class="form-error" role="alert" hidden></p>
-      <div class="dialog-actions">
-        <button type="submit" class="primary" id="importApply">Merge into this journal</button>
-        <button type="button" data-close-dialog>Cancel</button>
+      <div class="card feature">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg></div>
+        <div class="k">Import</div><p class="s">Checked first. A safety copy is kept before anything changes.</p>
+        <label class="btn sec sm file-btn" for="importFile">Import JSON</label>
+        <input type="file" id="importFile" accept="application/json,.json" class="sr-file">
       </div>
-    </form>
-  </dialog>
+      <div class="card feature">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M10 5v14"/></svg></div>
+        <div class="k">Spreadsheet</div><p class="s">Trades or daily totals as CSV.</p>
+        <div class="row-btns"><button type="button" class="btn sec sm" id="csvTradesBtn">Trades CSV</button><button type="button" class="btn sec sm" id="csvDaysBtn">Days CSV</button></div>
+      </div>
+    </div>
+  </section>
+</main>
 
-  <noscript><p class="footer-note">Bryz Trades needs JavaScript. It still stays on this device — there is no account.</p></noscript>
-  <script src="js/money.js"></script>
-  <script src="js/calculateRisk.js"></script>
-  <script src="js/calc.js"></script>
-  <script src="js/schema.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/format.js"></script>
-  <script src="js/logic.js"></script>
-  <script src="js/theme.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/app.js"></script>
+<footer class="wrap foot">Bryz Trades · A personal trading journal · Not financial advice</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="closeDlg" aria-labelledby="closeTitle">
+  <form method="dialog" id="closeForm" novalidate>
+    <h3 id="closeTitle">Close trade</h3>
+    <p class="s" id="closeSub"></p>
+    <div class="f"><label for="c-exit">Exit price</label><input id="c-exit" inputmode="decimal" placeholder="0.00"><p class="err" id="ce-exit"></p></div>
+    <div class="f"><label for="c-date">Close date</label><input id="c-date" type="date"><p class="err" id="ce-date"></p></div>
+    <div class="f"><label for="c-fees">Fees <span class="opt">optional</span></label><input id="c-fees" inputmode="decimal" placeholder="0.00"></div>
+    <div class="dlg-foot"><button type="button" class="btn sec" data-cancel>Cancel</button><button type="submit" class="btn pri">Close trade</button></div>
+  </form>
+</dialog>
+
+<dialog id="confirmDlg" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h3 id="confirmTitle">Delete trade?</h3>
+    <p class="s" id="confirmSub"></p>
+    <div class="dlg-foot"><button type="button" class="btn sec" data-cancel>Cancel</button><button type="submit" class="btn danger" value="ok" id="confirmOk">Delete</button></div>
+  </form>
+</dialog>
+
+<dialog id="dayDlg" aria-labelledby="dayTitle">
+  <form method="dialog" id="dayForm" novalidate>
+    <h3 id="dayTitle">Day</h3>
+    <div id="dayTrades"></div>
+    <div class="f"><label for="d-manual">Manual result <span class="opt">optional · not added to trade totals</span></label><input id="d-manual" inputmode="decimal" placeholder="e.g. -42.50"><p class="err" id="de-manual"></p></div>
+    <div class="f"><label for="d-note">Note <span class="opt">optional</span></label><textarea id="d-note" rows="3" maxlength="2000"></textarea></div>
+    <p class="s" id="dayExtra"></p>
+    <div class="dlg-foot"><button type="button" class="btn sec" data-cancel>Close</button><button type="button" class="btn ghost" id="dayClear">Clear day</button><button type="submit" class="btn pri">Save day</button></div>
+  </form>
+</dialog>
+
+<dialog id="importDlg" aria-labelledby="importTitle">
+  <form method="dialog" id="importForm">
+    <h3 id="importTitle">Import backup</h3>
+    <div class="s" id="importSummary"></div>
+    <label class="check-row"><input type="checkbox" id="i-overwrite"> Overwrite trades that share an id with a saved trade</label>
+    <label class="check-row"><input type="checkbox" id="i-similar"> Also import closed trades that look like ones already saved</label>
+    <label class="check-row"><input type="checkbox" id="i-days"> Use the file's manual day notes where both have one</label>
+    <div class="dlg-foot"><button type="button" class="btn sec" data-cancel>Cancel</button><button type="submit" class="btn ghost" value="replace">Replace all</button><button type="submit" class="btn pri" value="merge">Merge</button></div>
+  </form>
+</dialog>
+
+<script src="js/money.js"></script>
+<script src="js/schema.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/calculateRisk.js"></script>
+<script src="js/format.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
